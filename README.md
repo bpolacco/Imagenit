@@ -12,7 +12,7 @@ If you have Docker installed, you can run these by:
 
 ```
 docker run --rm --detach -p 80:80 bpolacco/imagenit:version0.11
-docker run --rm --detach -p 8080:80 bpolacco/imagenit_map:version0.11
+docker run --rm --detach -p 1717:80 bpolacco/imagenit_map:version0.1
 
 ```
 
@@ -20,4 +20,4 @@ Then point your browser to
 
 [http://localhost](http://localhost)
 and
-[http://localhost:8080](http://localhost:8080)
+[http://localhost:1717](http://localhost:1717)
