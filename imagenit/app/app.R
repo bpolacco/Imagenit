@@ -1,0 +1,1046 @@
+# Main Shiny app for Imagenit, a tool to enable exploration of gene families in metagenome
+# sequence data.  A collaboration of UCSF and JGI
+
+
+library(shiny)
+library (shinyjs)
+library (data.table)
+#library (qvalue)
+
+library(promises)
+library(future)
+plan(multiprocess)
+
+
+source ("./LoadScript.R")
+source ("./sourceHtml.R")
+source ("./asyncStatus.R")
+
+
+
+# UI Definition ----
+# Define UI for application that draws a histogram
+ui <- fluidPage(
+  useShinyjs(),
+  #shinythemes::themeSelector(),
+  
+  # Application title
+  titlePanel("Imagenit: Finding genes in contrasting metagenomes"),
+  
+  tabsetPanel(
+    # _ tabPanel 1 Instructions --------------------------------------
+    tabPanel("1. Instructions", value="instructionsTab",
+             HTML(instructionHTML)
+             ),
+    # _ tabPanel 2 Select --------------------------------------
+    tabPanel("2. Select Metagenome Surveys",
+             fluidRow(
+               HTML (setSelectionInstructionsHTML),
+               HTML ("<hr/>"),
+               column(6,style = "border: 3px solid #F8766D; ", 
+                      textInput ('set1Name', "Name to use for set 1", "set 1"),
+                      selectInput('showSet1BoxSelect', label = "Metagenomes in Set 1 (click to view all)", 
+                                           choices = c(), multiple=FALSE, width="100%",
+                                           selectize = FALSE), 
+                      actionButton('removeOneFromSet1Button', "Remove 1"),
+                      actionButton ('addToSet1Button', "Add to Set 1"),
+                      actionButton ('clearSet1Button', "Clear Set 1")
+                      
+               ),
+               #column(4,verbatimTextOutput('showSelectionBox')),
+               column(6,style = "border: 3px solid #00BFC4; ",
+                      textInput ('set2Name', "Name to use for set 2", "set 2"),
+                      fluidRow(selectInput('showSet2BoxSelect', label = "Metagenomes in Set 2 (click to view all)", 
+                                           choices = c(), multiple=FALSE, width="100%",
+                                           selectize = FALSE)),
+                      actionButton('removeOneFromSet2Button', "Remove 1"),
+                      actionButton('addToSet2Button', "Add to Set 2"),
+                      actionButton('clearSet2Button', "Clear Set 2")
+               )
+             ),
+             HTML ("<hr/>"),
+             HTML ("<strong>All available metagenome surveys and their metadata</strong>"),
+             fluidRow(column(12,
+                             DT::dataTableOutput("selectionTable"), 
+                             style = "overflow-y: visible; overflow-x: auto;")
+             )
+    ),
+
+    # _ tabPanel 3 Computations --------------------------------------
+    tabPanel("3. Computations",
+             fluidRow (
+                       column(6,
+                              HTML(instructionsComputationsHTML)
+                       ), 
+                       column(6, 
+                       checkboxGroupInput('hmmTypes', label="HMMs from:", 
+                                          inline = TRUE,selected = c("pfam"),
+                                          choices = c("PFAM models" = "pfam",
+                                                      "SFLD families" = "families",
+                                                      "SFLD subgroups" = "subgroups"
+                                                      )),
+                       actionButton('doComparisonButton', "Do Comparison"),
+                       htmlOutput ('statusText'))
+                       
+             ),
+             fluidRow(
+               HTML ("<hr/>"),
+               column(4,
+                      HTML ("<strong>Size and PFAM counts in selected metagenomes</strong>"),
+                      fluidRow(plotOutput("metagenomesInSetsPlot",
+                                          click = "metagenomeScatter_click")),
+                      htmlOutput("selectedMetagenome_label")
+                      
+                      ),
+               column(8,
+                      fluidRow(
+                        plotOutput("resultsScatter",
+                                   click = "scatter_click",
+                                   dblclick = "scatter_dblclick",
+                                   hover = "scatter_hover",
+                                   brush = brushOpts(
+                                     id = "scatter_brush",
+                                     resetOnNew = TRUE
+                                   ))),
+                      fluidRow(column (6,
+                        actionButton("clearSelect_button", "Clear Selection"),
+                        htmlOutput("scatter_pfamLabel"),
+                        HTML ("<p> Selected points (double click, or drag a rectangle to select multiple) above appear in detail plot below </p>")
+                        ),
+                        column(6,
+                                HTML ("Use slider to limit HMMs by significance"),
+                        sliderInput('qValueSelector', label="max log10(pValue)",
+                                     max = 0, min=-20, value=-2)
+                        )
+                      ),
+                      fluidRow()
+               )
+             ),
+             fluidRow(
+               HTML ("<hr/>"),
+                      column(12,plotOutput("resultsPlot",
+                                           click = "results_click",
+                                           dblclick = "results_dblclick",
+                                           hover = "results_hover",
+                                           brush = brushOpts(
+                                             id = "results_brush",
+                                             resetOnNew = TRUE
+                                           )
+                                           ),
+                             radioButtons("rateOrCount_radioButtons", label = "X axis shows", 
+                                          choices = c("Rate of sequences" = "rate","Count of sequences" = "count"),
+                                          inline=TRUE)
+                             )
+                      
+                      )
+             ),
+    # _ tabPanel 4 Download data --------------------------------------
+    tabPanel("4. Download data and results",
+             tabsetPanel(tabPanel("Metagenome Table",
+                                  downloadButton ("downloadMetagenomeTableButton", "Download Table"),
+                                  DT::dataTableOutput("resultsByMetagenomeTable")),
+                         tabPanel("HMM Table",
+                                  
+                                  fluidRow(
+                                    column(6,
+                                      radioButtons ("radioButtons_HowManyHMMRows", label="Show Rows For:", 
+                                                    choices = c("Plot-highlighted HMM" = "selected",
+                                                                "Plotted HMM" = "plotted",
+                                                                "All HMM" = "all"),
+                                                    inline = TRUE),
+                                      actionButton("selectHMMButton", label="Highlight selected HMM in plot"),
+                                      downloadButton ("downloadHMMTableButton", "Download Table")
+                                    ),
+                                    column(6,
+                                      htmlOutput("downloadSet1SeqsForSelectedHMMs"),
+                                      htmlOutput("downloadSet2SeqsForSelectedHMMs"),
+                                      htmlOutput("linkToMapForSelectedHMM")
+                                    )
+                                    ),
+                                  DT::dataTableOutput("resultsByHMMTable")
+                                  )
+                          )
+             
+            
+             )
+    
+    
+    
+  )
+)
+
+
+
+# Server definition ---------------------------------------
+server <- function(input, output, session) {
+  
+  # instructions page  ------------------------------
+
+  
+  ## preloaded set defs  --------------------------------
+  highSalt = c("3300000930",
+               "3300000928",
+               "3300000864",
+               "3300000860")
+  lowSalt = c("3300000853",
+              "3300000867",
+              "3300000929",
+              "3300000883"
+  )
+  
+  twitchellIsland = c("3300000030",
+               "3300000094",
+               "3300000316",
+               "3300000318",
+               "3300000854",
+               "3300000894",
+               "3300000917",
+               "3300001281",
+               "3300001547",
+               "3300002961",
+               "3300003432")
+  saltPond = c("3300000374",
+               "3300000381",
+               "3300000386",
+               "3300000412",
+               "3300000427",
+               "3300000488",
+               "3300000526",
+               "3300007532",
+               "3300007609",
+               "3300007611",
+               "3300007616",
+               "3300007623",
+               "3300007631",
+               "3300007725",
+               "3300007778",
+               "3300008963",
+               "3300009000",
+               "3300009001",
+               "3300009027")
+  
+  saltPond2 = c("3300007532",
+                "3300007533",
+                "3300007535",
+                "3300007536",
+                "3300007537",
+                "3300007614",
+                "3300007616",
+                "3300007619",
+                "3300007623",
+                "3300007626",
+                "3300007628",
+                "3300007633",
+                "3300007635",
+                "3300007668",
+                "3300007712",
+                "3300007723",
+                "3300007725",
+                "3300007757",
+                "3300007764",
+                "3300007769",
+                "3300007775",
+                "3300007778",
+                "3300007784",
+                "3300007983",
+                "3300007984",
+                "3300009000",
+                "3300009001",
+                "3300009027",
+                "3300009033",
+                "3300009035",
+                "3300009060",
+                "3300009138",
+                "3300009145")
+  twitchellIsland2 = c("3300002961",
+                       "3300005873",
+                       "3300005874",
+                       "3300005875",
+                       "3300005876",
+                       "3300005879",
+                       "3300005881",
+                       "3300005883",
+                       "3300005884",
+                       "3300005885",
+                       "3300005886",
+                       "3300005887",
+                       "3300005888",
+                       "3300005889",
+                       "3300005890",
+                       "3300005891",
+                       "3300005892",
+                       "3300005893",
+                       "3300005894",
+                       "3300005895",
+                       "3300005896",
+                       "3300005897",
+                       "3300005898",
+                       "3300005899",
+                       "3300005900",
+                       "3300005901",
+                       "3300005902",
+                       "3300005903",
+                       "3300005904",
+                       "3300005905")
+  
+  ## selection page  --------------------------------
+  
+  sets <- reactiveValues(set2=twitchellIsland2, set1=saltPond2)
+  
+  output$selectionTable <- DT::renderDataTable({
+    DT::datatable(metaData, extensions=c("Buttons"),
+                  style="bootstrap", class = 'table-condensed table-bordered',
+                  rownames=FALSE,
+                  colnames = c("Study Name" = "Study.Name",
+                               "Sample Name" = "Genome.Name...Sample.Name"),
+                  options = list(dom = 'Bfrtip',
+                                 buttons=list('pageLength', 'csv', 'colvis'),
+                                 pageLength=25,
+                                 orderClasses =TRUE,
+                                 autoWidth = TRUE,  #needed to set width below
+                                 scrollX=TRUE,   #needed to set width below
+                                 columnDefs = list(list(
+                                   targets = c(1,2),
+                                   width="300px"
+                                 ))))
+  })
+  
+  selectionTableProxy = DT::dataTableProxy('selectionTable')
+  
+  #update the values in showSet1BoxSelect as sets$set1 changes
+  observe({
+    dataMap = metaData[taxon_oid %in% sets$set1, .(taxon_oid, as.character(Genome.Name...Sample.Name))]
+    dm = dataMap$taxon_oid
+    names(dm) = dataMap$V2
+    
+    updateSelectInput(session, "showSet1BoxSelect", choices = dm)
+  })
+
+  #update the values in showSet2BoxSelect as sets$set2 changes
+  observe({
+    dataMap = metaData[taxon_oid %in% sets$set2, .(taxon_oid, as.character(Genome.Name...Sample.Name))]
+    dm = dataMap$taxon_oid
+    names(dm) = dataMap$V2
+    
+    updateSelectInput(session, "showSet2BoxSelect", choices = dm)
+  })
+  
+  
+  output$showSet2Box <-  renderPrint({
+    s = metaData[taxon_oid %in% sets$set2, .(as.character(Genome.Name...Sample.Name))]
+    if (nrow(s) > 0){
+      cat ('<ol><li>')
+      cat(unlist(s), sep = '</li>\n<li>')
+      cat('</li></ol>')
+    }
+
+  })
+  
+  
+  #update text on buttons with number of selected rows
+  selLength <- reactive ({length(input$selectionTable_rows_selected)})
+  observeEvent (selLength(),{
+    numRows = selLength()#length(input$selectionTable_rows_selected)
+    if (numRows > 0){
+      updateActionButton(session, inputId = "addToSet1Button", 
+                         label = paste ("Add", numRows, "selected rows to set 1"))
+      updateActionButton(session, inputId = "addToSet2Button",
+                         label = paste ("Add", numRows, "selected rows to set 2"))
+      
+    }
+    else{
+      updateActionButton(session, inputId = "addToSet1Button",
+                         label = paste ("Select rows below to add to either set"))
+      updateActionButton(session, inputId = "addToSet2Button",
+                         label = paste ("Select rows below to add to either set"))
+      
+    }
+    
+  })
+  
+  
+  observeEvent(input$addToSet1Button, {
+    req(input$selectionTable_rows_selected)
+    s = metaData[input$selectionTable_rows_selected,taxon_oid,]
+    selectRows(selectionTableProxy, NULL)
+    sdiff = setdiff(s, sets$set2)
+    if (length(sdiff)  != length(s)){
+      showNotification("Some metagenomes already in other set, not added", type = "warning") 
+    }
+    sets$set1 = union(sets$set1,sdiff)
+  })
+  
+  observeEvent(input$addToSet2Button, {
+    req(input$selectionTable_rows_selected)
+    s = metaData[input$selectionTable_rows_selected,taxon_oid,]
+    selectRows(selectionTableProxy, NULL)
+    sdiff = setdiff(s, sets$set1)
+    if (length(sdiff)  != length(s)){
+     showNotification("Some metagenomes already in other set, not added", type = "warning") 
+    }
+    sets$set2 = union(sets$set2,sdiff)
+  })
+  
+  
+  observeEvent(input$clearSet1Button, {
+    sets$set1 = character(0)
+  })
+  observeEvent(input$clearSet2Button, {
+    sets$set2 = character(0)
+  })
+  
+  observeEvent (input$removeOneFromSet1Button,{
+    sets$set1 = setdiff(sets$set1, input$showSet1BoxSelect)
+  })
+  
+  observeEvent (input$removeOneFromSet2Button,{
+    sets$set2 = setdiff(sets$set2, input$showSet2BoxSelect)
+  })
+  
+  
+    
+  output$selectMap <- renderPlot({
+    selectedGenomes = rbind(data.frame(taxon_oid = sets$set1, condition = rep("set1", length(sets$set1))),
+                            data.frame(taxon_oid = sets$set2, condition = rep("set2", length(sets$set2)))
+    )
+    
+    metagenomes = merge (metagenomeInfo, selectedGenomes, by = "taxon_oid")
+    
+    ggp = drawWorldMap(ggplot())
+    ggp +
+      geom_point (data= metagenomes, 
+                  aes (x=Longitude, 
+                       y=Latitude,
+                       color=condition,
+                       size = Gene_Count_assembled
+                  ), 
+                  alpha=0.5) +
+      labs(size= "Survey Gene Count", color="Condition")
+    
+  })
+  
+   
+  
+  
+  ## computation page  ===========================
+  statInfo <- statusSetup()
+  set_status(statInfo, "Ready")
+  onStop(function(){statusCleanUp(statInfo)})
+  
+  #when loading and computations are done, this will hold results
+  asyncData = reactiveVal(NULL)
+  nclicks = reactiveVal(0)
+
+  output$statusText <- renderText ({
+    #not sure if this is necessary/functional, but putting this call to asyncData here
+    # is meant to invalidate statusText when asyncData changes so that we dont' have to 
+    # worry about timing/order of setting nclicks 
+    asyncData()
+    if (nclicks() > 0){
+      invalidateLater(2000,session)
+    }
+    msg = get_status(statInfo)
+    if (msg != "Ready"){
+      openTag = "<strong>"
+      closeTag = "</strong>"
+    } else{
+      openTag = ""
+      closeTag = ""
+    }
+    paste (openTag, "Status: ", get_status(statInfo), closeTag)
+  })
+  
+  # this is the main action button on this page.
+  # many things should happen when its clicked
+  # some ideas/code around using futures copied from  http://blog.fellstat.com/?p=407
+  observeEvent (input$doComparisonButton,{
+    disable("doComparisonButton")
+    #alert ("testing")
+    #ranges$x <- ranges$y <- NULL
+    #with (ranges, {x <- y <- NULL})
+    #selectedPoints$points <- selectedPoints$metagenome <- NULL
+    #with (selectedPoints, {points <<- metagenome <- NULL})
+    
+    if(nclicks() != 0){
+      #disable button up top should avoid this, but just in case...
+      showNotification (paste ("Already running one analysis; please wait: ", get_status(statInfo)))
+      return (NULL)
+    }
+    
+    # Increment clicks and prevent concurrent analyses
+    nclicks(nclicks() + 1)
+    fire_running(statInfo)
+    
+    # start the computation, store the promise in result_val
+    
+    #prepare data to pass to future call
+    setss = list(set1 = sets$set1, set2  = sets$set2 )
+    hmmTypes = input$hmmTypes
+    statusFUN = (function(message){
+      set_status(statInfo, message)
+    })
+    result <- future({
+      workingData <- LoadData(setss, hmmTypes, statusFUN)
+      DoComputation(workingData, statusFUN) 
+      }) %...>% asyncData()
+    
+    # Catch interrupt (or any other error) and notify user
+    result <- catch(result,
+                    function(e){
+                      asyncData(NULL)
+                      print(e$message)
+                      showNotification(paste ("Error:", e$message), type="error")
+                    })
+    
+    # After the promise has been evaluated set nclicks to 0 to allow for another Run
+    result <- finally(result,
+                      function(){
+                        fire_ready(statInfo) 
+                        nclicks(0)
+                        enable("doComparisonButton")
+                      })
+    
+    # Return something other than the promise so shiny remains responsive
+    NULL    
+    
+  })
+  
+  
+  # 
+  # tabulate necessary data for taxonOIDs and hmmTypes
+  # 
+  LoadData <- function (sets, hmmTypes, statusFUN = NULL){
+    taxonIDs = unlist(sets)
+    summaryDataList = list()
+    if (!is.null(statusFUN)) statusFUN("Loading pfam data for selected metagegenomes")
+    if ("pfam" %in% hmmTypes){
+      for (taxon in taxonIDs){
+        if (is.null(summaryDataList[[taxon]])){
+          summaryDataList[[taxon]] <- loadOneTaxonSummary(taxon)
+        }
+      }
+    }
+    if ("pfam" %in% hmmTypes){
+      result = do.call(rbind, summaryDataList)
+    }
+    else{
+      result = data.table (taxon_oid = factor(NULL),
+                           hmm = character(0),
+                           numSeqs =integer(0),
+                           sumCoverage = numeric(0))
+    }
+    if ("families" %in% hmmTypes){
+      result = rbind (result, getSFLDFamilyData(taxonIDs))
+    }
+    if ("subgroups" %in% hmmTypes){
+      result = rbind (result, getSFLDSubgroupData(taxonIDs))
+    }
+    
+    result = fillInZeros (result, sets)
+    result = addMetagenomeInfo(result, metagenomeInfo)
+    result[,numSeqsLogFriendly:=as.numeric(numSeqs)]
+    result[numSeqs==0, numSeqsLogFriendly := 0.1]
+    result
+  }
+  
+  DoComputation <- function(workingData,statusFUN = NULL){
+    if (!is.null(statusFUN)) statusFUN("Comparing HMMSEARCH results, calculating statistics")
+    
+    allHmm = levels(workingData$hmm)
+      #n = length(dataByHMM)
+      n = length(allHmm)
+      df = data.table(hmm = levels(workingData$hmm), 
+                      meanSet1 = numeric(n), 
+                      meanSet2 = numeric(n), 
+                      ratioLog2 = numeric(n), 
+                      pValue = numeric(n)#, 
+                      #qValue = numeric(n)
+      )
+      for (i in 1:n){
+        #hmm = names(dataByHMM)[i]
+        hmmI = allHmm[i]
+        #pValue = pPoisson(dataByHMM[[hmm]])
+        #stats = lm.summary (workingData[hmm==hmmI])
+        stats = t.test.summary(workingData[hmm==hmmI])
+        #stats = pPoisson.summary(workingData[hmm==hmmI])
+        df$pValue[i] = stats$pValue
+        df$meanSet1[i] = stats$meanSet1
+        df$meanSet2[i] = stats$meanSet2
+        df$ratioLog2[i]=stats$ratioLog2
+        #df$effectError[i] = stats$effectError
+        if (!(i%%200)){
+          if (!is.null(statusFUN)) statusFUN(sprintf("Comparing HMMSEARCH results, calculating statistics  %d%% done", round(i/n * 100)))
+        }
+      }
+  list(hmmMatchTable = workingData, hmmStats = df)    
+  }
+  
+  # computedData
+  computedData = reactive({
+    req(asyncData())
+    list(hmmStats = asyncData()$hmmStats, qValues=NULL)
+  })
+  
+  # dataForChosenSets
+  dataForChosenSets = reactive({
+    req(asyncData())
+    asyncData()$hmmMatchTable
+  })
+
+
+  selectedMetagenomes = reactive({
+    selectedGenomes = rbind(data.frame(taxon_oid = sets$set1, condition = rep("set1", length(sets$set1))),
+                            data.frame(taxon_oid = sets$set2, condition = rep("set2", length(sets$set2)))
+    )
+    
+    merge (metagenomeInfo, selectedGenomes, by = "taxon_oid")
+    
+  })
+  
+  output$metagenomesInSetsPlot <- renderPlot({
+    #plot(totalPfamCount~Genome_Size_assembled, data = metagenomes, color = condition)
+    ggp = ggplot(data=selectedMetagenomes()) + 
+      geom_point(aes(x=Gene_Count_assembled, y=totalPfamCount, color = condition)) +
+      scale_color_discrete(name="Set",
+                           breaks=c("set1", "set2"),
+                           labels=c(input$set1Name, input$set2Name))  + 
+      scale_x_log10() + scale_y_log10()
+    
+    
+    if (!is.null(selectedPoints$metagenome) ){
+      ggp = ggp + geom_point(aes(x=Gene_Count_assembled, y=totalPfamCount),data=selectedMetagenomes()[taxon_oid == selectedPoints$metagenome],  size=5, shape=21)
+    }
+    
+    ggp
+    
+  })  
+
+  observeEvent(input$metagenomeScatter_click,{
+    clickedPoint = nearPoints(selectedMetagenomes(),coordinfo=input$metagenomeScatter_click, maxpoints=1)
+    if (length(clickedPoint) > 0){
+      selectedPoints$metagenome = clickedPoint[1]$taxon_oid
+      
+      updateSelectInput(session, "showSet1BoxSelect", selected = selectedPoints$metagenome)
+      updateSelectInput(session, "showSet2BoxSelect", selected = selectedPoints$metagenome)
+      
+    }
+    else{
+      selectedPoints$metagenome = NULL
+    }
+  })
+    
+  observeEvent (computedData(),{
+    #for now use pValues despite name
+    r = range(log10(computedData()$hmmStats$pValue[computedData()$hmmStats$pValue > 0]))
+    updateSliderInput(session, 'qValueSelector', min = floor(r[1]), max=ceiling(r[2]))
+  })
+  
+  subsetStats = reactive({
+    computedData()$hmmStats[pValue < (10^input$qValueSelector)]
+  })
+  
+  #store the sets of taxon_oids to compare...
+  ranges <- reactiveValues(x = NULL, y = NULL)
+  selectedPoints <- reactiveValues(points=NULL, metagenome=NULL)
+  
+  
+  # calculateQValues=function(subsetData){
+  #   subsetData %>% split(subsetData$hmm) %>% lapply (pPoisson) %>% unlist %>% qvalue()
+  # }
+
+  selectPoints <- function(rows, toggle=FALSE){
+    if (nrow(rows) > 0){
+      if(is.null(selectedPoints$points) || dim(selectedPoints$points)[1]==0){
+        selectedPoints$points = rows
+        return()
+      }
+      matches = which (selectedPoints$points$hmm %in% rows$hmm)
+      if (toggle & length(matches >0)){
+        selectedPoints$points = selectedPoints$points[-matches,]
+      }
+      else{
+        selectedPoints$points = rbind (selectedPoints$points, rows, fill=TRUE)
+      }
+    }
+  }
+  
+  observeEvent(input$scatter_dblclick, {
+    clickedPoint = nearPoints(subsetStats(),coordinfo=input$scatter_dblclick, maxpoints=1)
+    if (nrow(clickedPoint) > 0){
+      if(is.null(selectedPoints$points) || dim(selectedPoints$points)[1]==0){
+        selectedPoints$points = clickedPoint
+        return()
+      }
+      clickedPoint = clickedPoint[1,]
+      matches = which (selectedPoints$points$hmm == clickedPoint$hmm[1])
+      if (length(matches >0)){
+        selectedPoints$points = selectedPoints$points[-matches,]
+      }
+      else{
+        selectedPoints$points = rbind (selectedPoints$points, clickedPoint, fill=TRUE)
+      }
+    }
+  })
+
+  observeEvent(input$zoom_button,{ #
+    brush <- input$scatter_brush
+    if (!is.null(brush)) {
+      ranges$x <- c(brush$xmin, brush$xmax)
+      ranges$y <- c(brush$ymin, brush$ymax)
+      
+    } else {
+      ranges$x <- NULL
+      ranges$y <- NULL
+    }
+  })
+  
+  observeEvent(input$zoomOut_button,{
+    ranges$x <- NULL
+    ranges$y <- NULL
+  })
+  
+  observeEvent(input$scatter_brush, { #input$selectRect_button,
+    brush <- input$scatter_brush
+    if (!is.null(brush)){
+     selectPoints (brushedPoints(subsetStats(),brush)) 
+    }
+  })
+  
+  observeEvent(input$clearSelect_button,{
+    selectedPoints$points = NULL
+  })
+  
+
+  observeEvent(input$results_click, {
+    clickedPoint = nearPoints(focusedData(),coordinfo=input$results_click, maxpoints=1)
+    if (length(clickedPoint) > 0){
+      selectedPoints$metagenome = clickedPoint[1]$taxon_oid
+    }
+    else{
+      selectedPoints$metagenome = NULL
+    }
+  })
+  
+    
+
+    
+  output$resultsScatter <- renderPlot({
+    stats = subsetStats()
+    req(stats)
+    ggp = ggplot (data = stats) +
+      geom_point (aes(x=meanSet2, y=meanSet1, color=log10(pValue)), alpha=0.5
+      ) + scale_x_log10() + scale_y_log10()
+    if (!is.null(selectedPoints$points) & length(selectedPoints$points) > 0){
+      ggp = ggp + geom_point(aes(x=meanSet2, y=meanSet1),data=selectedPoints$points,  size=5, shape=23)
+    }
+    if (!is.null(ranges$x)){
+      ggp = ggp + coord_cartesian(xlim=ranges$x, ylim=ranges$y)#+
+    }
+    ggp= ggp + labs(x=input$set2Name, y=input$set1Name, title=sprintf("HMM Match Rates Compared %s vs %s", input$set1Name, input$set2Name), subtitle="Points off the diagonal show strongest differences")
+  
+    xrange = range(stats$meanSet2)
+    yrange = range(stats$meanSet1)
+    xyrange =c(max(xrange[1], yrange[1]), min(xrange[2], yrange[2]))
+    
+    x4line = 10^ seq(log10(xyrange[1]), log10(xyrange[2]), length.out=20)
+    ggp = ggp + geom_line(data=data.frame(x=x4line, y=x4line), aes(x=x,y=y), linetype=2)
+    ggp
+  })
+  
+
+  focusedData = reactive({
+    req(selectedPoints$points)
+    dataForChosenSets()[hmm %in% selectedPoints$points$hmm][, hmm:=droplevels(hmm)]
+  })
+
+  selectedHMMNames = reactive({
+    ydata <- pfamInfo[pfamAcc %in% levels(focusedData()$hmm), .(pfamAcc, description)]
+    ydata <- rbind (ydata, subgroupNames[hmmAcc %in% levels(focusedData()$hmm),
+                                         .(pfamAcc = hmmAcc, description)
+                                         ]
+                    )
+    ydata <- rbind (ydata, familyNames[hmmAcc %in% levels(focusedData()$hmm),
+                                         .(pfamAcc = hmmAcc, description)
+                                         ]
+    )
+    names(ydata) = c("hmm", "description")
+    ydata
+  })
+  
+  allHMMNames = reactive ({
+    ydata <- pfamInfo[pfamAcc %in% levels(dataForChosenSets()$hmm), .(pfamAcc, description)]
+    ydata <- rbind (ydata, subgroupNames[hmmAcc %in% levels(dataForChosenSets()$hmm),
+                                         .(pfamAcc = hmmAcc, description)
+                                         ]
+    )
+    ydata <- rbind (ydata, familyNames[hmmAcc %in% levels(dataForChosenSets()$hmm),
+                                       .(pfamAcc = hmmAcc, description)
+                                       ]
+    )
+    names(ydata) = c("hmm", "description")
+    ydata
+    
+  })
+        
+  output$resultsPlot <- renderPlot({
+    req(selectedPoints$points)
+    #plotData = dataForChosenSets()
+    ydata = selectedHMMNames()
+
+    ggp = ggplot(data = focusedData())
+    if (input$rateOrCount_radioButtons == "rate"){
+      ggp = ggp + geom_point(aes(y=hmm, 
+                                       x=  ratio, 
+                                       color = condition, group=condition, size=Gene_Count_assembled),
+                                   alpha=0.6)+
+        scale_x_log10() +
+        xlab("# HMM matches per # Metagenome Sequences")
+    }
+    else{
+      recodeZero = function(breaks){
+        breaks[breaks == 0.1] = 0
+        breaks
+      }
+      
+      ggp = ggp + geom_point(aes(y=hmm, 
+                                 x = numSeqsLogFriendly,
+                                 color = condition, group=condition, size=Gene_Count_assembled),
+                             alpha=0.6
+                             ) +
+        xlab("# of sequences (+1)") +
+        scale_x_log10(labels=recodeZero)
+    }
+    
+    if (!is.null(selectedPoints$metagenome)){
+      if (input$rateOrCount_radioButtons == "rate"){
+        ggp = ggp + geom_point(aes(y=hmm, x = ratio), size=5, shape=21, data=focusedData()[taxon_oid == selectedPoints$metagenome])
+      }
+      else {
+        ggp = ggp + geom_point(aes(y=hmm, x = numSeqsLogFriendly), size=5, shape=21, data=focusedData()[taxon_oid == selectedPoints$metagenome])
+      }
+    }
+    
+    ggp = ggp + ylab("")+
+      
+      theme(axis.text.y=element_text(size=12, face ="bold"))+
+      scale_color_discrete(name="Set",
+                          breaks=c("set1", "set2"),
+                          labels=c(input$set1Name, input$set2Name)) +
+      scale_y_discrete (breaks = ydata$hmm, 
+                        labels = ydata$description,
+                        position = "right")
+    #coord_flip()
+    ggp = ggp + theme(legend.position="top")
+    
+    ggp
+  }, width = 1300)
+  
+  
+  output$scatter_pfamLabel <- renderText({
+    pointStr = "Hover over point above to see HMM name"
+    if (!is.null(input$scatter_hover)){
+      point = nearPoints(computedData()$hmmStats,input$scatter_hover,  maxpoints=1)
+      if (nrow(point) > 0){
+        hmm = point[1,]$hmm
+        pointStr = pfamInfoString(hmm)
+      }
+    }
+    pointStr
+  })
+  
+  output$results_metagenomeLabel <- renderText({
+    pointStr = "test2"
+    if (!is.null(input$results_hover)){
+      point = nearPoints(focusedData(),input$results_hover,  maxpoints=1)
+      if (nrow(point) > 0){
+        pointStr = paste (point[1,.(taxon_oid, GenomeSample_Name)])
+      }
+    }
+    pointStr
+
+  })
+  
+  
+  output$selectedMetagenome_label <- renderText({
+    if (isTruthy(selectedPoints$metagenome)){
+    metagenomeInfo[taxon_oid == selectedPoints$metagenome]$GenomeSample_Name
+    }
+    else{"Click on point above or below to see name of metagenome sample here"}
+  })
+
+  ##  results and download page  -----------------------------
+
+  dataForMetagenomeTable <- reactive ({
+    metagenomeTable = selectedMetagenomes()
+    if (input$set1Name != "set2"){  #if set1Name == "set2", we're in trouble...
+      metagenomeTable[condition == "set1", condition := input$set1Name]
+      metagenomeTable[condition == "set2", condition := input$set2Name]
+    }
+    
+    
+    hmmHits = focusedData()
+    
+    for (hm in unique(hmmHits$hmm) ){
+      hmmColumn = hmmHits[hmm == hm, .(taxon_oid, numSeqs)]
+      setnames(hmmColumn, old = "numSeqs", new = hm)
+      metagenomeTable = merge(metagenomeTable, hmmColumn, by = "taxon_oid")
+    }
+    metagenomeTable
+  })
+  
+  
+  output$resultsByMetagenomeTable <- DT::renderDataTable({
+    DT::datatable (dataForMetagenomeTable(), 
+                   style="bootstrap", class = 'table-condensed table-bordered',
+                   rownames=FALSE,
+                   colnames = c("Sample Name" = "GenomeSample_Name",
+                                "total PFAM matches" = "totalPfamCount",
+                                "Metagenome Size" = "Genome_Size_assembled",
+                                "Metagenome Gene Count" = "Gene_Count_assembled",
+                                "Metagenome Scaffold Count" = "Scaffold_Count_assembled",
+                                "Metagenome rRNA 16S Count" = "rRNA_16S_Count_assembled"),
+                   
+                   options = list(dom = 'Bfrtip',
+                                  buttons=list('pageLength'),
+                                  pageLength=25,
+                                  orderClasses =TRUE,
+                                  autoWidth = TRUE,  #needed to set width below
+                                  scrollX=TRUE,   #needed to set width below
+                                  columnDefs = list(list(
+                                    targets = c(7),
+                                    width="500px"
+                                  ))) )
+  })
+  
+  dataForHMMTable = reactive({
+    # subsetStats =  computedData()$hmmStats[pValue < (10^-input$qValueSelector)]
+    #     a table of stats for the hmm, those that pass pValue threshold
+    # selectedHMMNames =  a two column table of hmmName, description for focusedData hmms
+    # focusedData = dataForChosenSets()[hmm %in% selectedPoints$points$hmm][, hmm:=droplevels(hmm)]
+    #    the raw data counts/ratios/coverages as display in tab3
+    
+    if (input$radioButtons_HowManyHMMRows == "selected"){
+      hmmTable = merge (subsetStats(), selectedHMMNames(), by="hmm")
+    } else if (input$radioButtons_HowManyHMMRows == "plotted"){
+      hmmTable = merge (subsetStats(), allHMMNames(), by = "hmm")
+    } else if (input$radioButtons_HowManyHMMRows == "all"){
+      hmmTable = merge (computedData()$hmmStats, allHMMNames(), by = "hmm")
+    }   
+    #setnames(hmmTable, old = c('meanSet1', 'meanSet2'), 
+    #         new = paste (c(input$set1Name, input$set2Name), "HMM rate")
+    #)
+    
+    hmmTable
+  })
+  
+  hmmTableDataWithMetagenomeCounts = reactive({
+    hmmTable = dataForHMMTable()
+    if (input$radioButtons_HowManyHMMRows == "selected"){
+      hmmHits = focusedData()
+    } else if (input$radioButtons_HowManyHMMRows == "plotted"){
+      hmmHits = dataForChosenSets()[hmm %in% hmmTable$hmm][, hmm:=droplevels(hmm)]
+    } else if (input$radioButtons_HowManyHMMRows == "all"){
+      hmmHits = dataForChosenSets()
+    }   
+    
+    for (tid in c(sets$set1, sets$set2)){
+      taxonColumn = hmmHits[taxon_oid == tid, .(hmm, numSeqs)]
+      setnames(taxonColumn, old = "numSeqs", new = tid)
+      hmmTable = merge(hmmTable, taxonColumn, by = "hmm", all.x=TRUE)
+    }
+    hmmTable
+  })
+  
+  output$resultsByHMMTable <- DT::renderDataTable({
+    hmmTable = hmmTableDataWithMetagenomeCounts()
+    
+    #jump through a few hoops to get name conversion data strucutre as needed
+    meanSet1ColName = paste (input$set1Name, "HMM rate")
+    meanSet2ColName = paste (input$set2Name, "HMM rate")
+    colNamesToAdjust = c("meanSet1", "meanSet2", "ratioLog2")
+    names(colNamesToAdjust) = c(meanSet1ColName, meanSet2ColName, "log2 ratio")
+   
+    hmmTable %>%
+      DT::datatable(style="bootstrap", 
+                    class = 'table-condensed table-bordered',
+                    rownames=FALSE,
+                    colnames = colNamesToAdjust,
+                    options(pageLength=25,
+                            orderClasses=TRUE, #highlight the ordered column
+                            autoWidth=TRUE, scrollX=TRUE,  #needed to set width below
+                            columnDefs = list(list(
+                              targets = c(5),
+                              width="300px"
+                            ))
+                    )
+                            
+                    
+                    ) %>%
+
+      #formatRound(columns=c('ratioLog2'), digits=1) %>%
+      DT::formatSignif(columns=c(meanSet1ColName, 
+                             meanSet2ColName, 
+                             'pValue', 
+                             'log2 ratio'), 
+                   digits=2)
+  })
+
+  output$downloadMetagenomeTableButton <- downloadHandler(
+    filename = function(){
+      paste ("metagenomeTable",
+             input$set1Name, input$set2Name,
+             Sys.Date(), "csv", sep="." )
+    },
+    content = function(file){
+      write.csv ( dataForMetagenomeTable() , file)
+    }
+  )
+    
+  output$downloadHMMTableButton  <- downloadHandler(
+    filename = function(){
+      paste ("hmmTable",
+             input$set1Name, input$set2Name,
+             input$radioButtons_HowManyHMMRows,
+             Sys.Date(), "csv", sep="." )
+    },
+    content = function(file){
+     write.csv (hmmTableDataWithMetagenomeCounts(), file) 
+    }
+  )
+  
+  observeEvent(input$selectHMMButton, {
+    #if any rows are selected, add it to the list of selected points
+    req(input$resultsByHMMTable_rows_selected)
+    selectPoints(dataForHMMTable()[input$resultsByHMMTable_rows_selected])
+    
+  })
+  
+  output$downloadSet1SeqsForSelectedHMMs <- renderText({
+    hmm = dataForHMMTable()[input$resultsByHMMTable_rows_selected]$hmm
+    setName = input$set1Name
+    taxonOIDs = sets$set1
+    
+    CreateJGIFormManyPfamManyMetagenome(hmm, taxonOIDs, setName)
+    
+  })
+
+  output$downloadSet2SeqsForSelectedHMMs <- renderText({
+    hmm = dataForHMMTable()[input$resultsByHMMTable_rows_selected]$hmm
+    setName = input$set2Name
+    taxonOIDs = sets$set2
+    
+    CreateJGIFormManyPfamManyMetagenome(hmm, taxonOIDs, setName)
+    
+  })
+  
+  output$linkToMapForSelectedHMM <- renderText({
+    hmm = dataForHMMTable()[input$resultsByHMMTable_rows_selected]$hmm
+    CreateImagenitMapForm (hmm)
+  })
+  
+  
+}
+
+# Run the application 
+shinyApp(ui = ui, server = server)
+
