@@ -13,9 +13,10 @@ plan(multiprocess)
 
 
 source ("./LoadScript.R")
-source ("./sourceHtml.R")
 source ("./asyncStatus.R")
 
+
+source (config::get("sourceHtmlR"))#"./sourceHtml.R")
 
 
 # UI Definition ----
@@ -452,7 +453,7 @@ server <- function(input, output, session) {
   
   # this is the main action button on this page.
   # many things should happen when its clicked
-  # some ideas/code around using futures copied from  http://blog.fellstat.com/?p=407
+  # some ideas inspired by  http://blog.fellstat.com/?p=407
   observeEvent (input$doComparisonButton,{
     disable("doComparisonButton")
     #alert ("testing")
@@ -639,7 +640,6 @@ server <- function(input, output, session) {
     computedData()$hmmStats[pValue < (10^input$qValueSelector)]
   })
   
-  #store the sets of taxon_oids to compare...
   ranges <- reactiveValues(x = NULL, y = NULL)
   selectedPoints <- reactiveValues(points=NULL, metagenome=NULL)
   
@@ -869,7 +869,10 @@ server <- function(input, output, session) {
   })
 
   ##  results and download page  -----------------------------
-
+  
+  hmmTableProxy = DT::dataTableProxy('resultsByHMMTable')
+  
+  
   dataForMetagenomeTable <- reactive ({
     metagenomeTable = selectedMetagenomes()
     if (input$set1Name != "set2"){  #if set1Name == "set2", we're in trouble...
@@ -890,6 +893,8 @@ server <- function(input, output, session) {
   
   
   output$resultsByMetagenomeTable <- DT::renderDataTable({
+    MetagenomeTable_ =function(){} # for editor navigation
+    
     DT::datatable (dataForMetagenomeTable(), 
                    style="bootstrap", class = 'table-condensed table-bordered',
                    rownames=FALSE,
@@ -912,48 +917,56 @@ server <- function(input, output, session) {
                                   ))) )
   })
   
-  dataForHMMTable = reactive({
-    # subsetStats =  computedData()$hmmStats[pValue < (10^-input$qValueSelector)]
-    #     a table of stats for the hmm, those that pass pValue threshold
-    # selectedHMMNames =  a two column table of hmmName, description for focusedData hmms
-    # focusedData = dataForChosenSets()[hmm %in% selectedPoints$points$hmm][, hmm:=droplevels(hmm)]
-    #    the raw data counts/ratios/coverages as display in tab3
+
+  hmmTableDataFull <- reactive({
+    #build up table in 'wide' format from
+    # summary data in long format e.g.: hmm,taxon,count
+    # computed data : hmm, mean1, mean2, pValue
+    # hmm info table:  hmmName mostly
     
-    if (input$radioButtons_HowManyHMMRows == "selected"){
-      hmmTable = merge (subsetStats(), selectedHMMNames(), by="hmm")
-    } else if (input$radioButtons_HowManyHMMRows == "plotted"){
-      hmmTable = merge (subsetStats(), allHMMNames(), by = "hmm")
-    } else if (input$radioButtons_HowManyHMMRows == "all"){
-      hmmTable = merge (computedData()$hmmStats, allHMMNames(), by = "hmm")
-    }   
-    #setnames(hmmTable, old = c('meanSet1', 'meanSet2'), 
-    #         new = paste (c(input$set1Name, input$set2Name), "HMM rate")
-    #)
-    
-    hmmTable
-  })
-  
-  hmmTableDataWithMetagenomeCounts = reactive({
-    hmmTable = dataForHMMTable()
-    if (input$radioButtons_HowManyHMMRows == "selected"){
-      hmmHits = focusedData()
-    } else if (input$radioButtons_HowManyHMMRows == "plotted"){
-      hmmHits = dataForChosenSets()[hmm %in% hmmTable$hmm][, hmm:=droplevels(hmm)]
-    } else if (input$radioButtons_HowManyHMMRows == "all"){
-      hmmHits = dataForChosenSets()
-    }   
-    
+    # dataForChosenSets()
+    # computedData()$hmmStats
+    # allHMMNames()
+    print("hmm Table 1")
+    hmmTable = merge (computedData()$hmmStats, allHMMNames(), by = "hmm")
+    print("hmm Table 2")
+    hmmHits = dataForChosenSets()
+    print("hmm Table 3")
     for (tid in c(sets$set1, sets$set2)){
       taxonColumn = hmmHits[taxon_oid == tid, .(hmm, numSeqs)]
       setnames(taxonColumn, old = "numSeqs", new = tid)
       hmmTable = merge(hmmTable, taxonColumn, by = "hmm", all.x=TRUE)
     }
+    print("hmm Table 4")
     hmmTable
+    
   })
   
+
+  hmmTableDataSubset <- reactive({
+    fullTable = hmmTableDataFull()
+    if (input$radioButtons_HowManyHMMRows == "selected"){
+      subTab = fullTable[hmm %in% selectedPoints$points$hmm]
+    } else if (input$radioButtons_HowManyHMMRows == "plotted"){
+      subTab = fullTable[hmm %in%  computedData()$hmmStats[pValue < (10^input$qValueSelector)]$hmm]
+    } else if (input$radioButtons_HowManyHMMRows == "all"){
+      subTab = fullTable
+    }
+    subTab
+  })
+   
+  # I"m guessing because my column names are edited after the DT::dataTable call, this doesn't work.
+  # sort out the names and potentially we can avoid rebuilding the table when the subset changes.
+  #observe({
+  #  DT::replaceData(hmmTableProxy, hmmTableDataSubset())
+  #})
+  
   output$resultsByHMMTable <- DT::renderDataTable({
-    hmmTable = hmmTableDataWithMetagenomeCounts()
+    HMMTable_ =function(){} # for editor navigation
     
+    #hmmTableDataFull()  #invalidate based on full data but not the subset so I use isolate below
+    #hmmTable = isolate(hmmTableDataSubset()) #hmmTableDataWithMetagenomeCounts()
+    hmmTable = hmmTableDataSubset()
     #jump through a few hoops to get name conversion data strucutre as needed
     meanSet1ColName = paste (input$set1Name, "HMM rate")
     meanSet2ColName = paste (input$set2Name, "HMM rate")
@@ -974,14 +987,14 @@ server <- function(input, output, session) {
                             ))
                     )
                             
-                    
+      
                     ) %>%
 
       #formatRound(columns=c('ratioLog2'), digits=1) %>%
-      DT::formatSignif(columns=c(meanSet1ColName, 
-                             meanSet2ColName, 
-                             'pValue', 
-                             'log2 ratio'), 
+      DT::formatSignif(columns=c(meanSet1ColName,
+                             meanSet2ColName,
+                             'pValue',
+                             'log2 ratio'),
                    digits=2)
   })
 
@@ -1011,12 +1024,12 @@ server <- function(input, output, session) {
   observeEvent(input$selectHMMButton, {
     #if any rows are selected, add it to the list of selected points
     req(input$resultsByHMMTable_rows_selected)
-    selectPoints(dataForHMMTable()[input$resultsByHMMTable_rows_selected])
+    selectPoints(hmmTableDataSubset()[input$resultsByHMMTable_rows_selected])
     
   })
   
   output$downloadSet1SeqsForSelectedHMMs <- renderText({
-    hmm = dataForHMMTable()[input$resultsByHMMTable_rows_selected]$hmm
+    hmm = hmmTableDataSubset()[input$resultsByHMMTable_rows_selected]$hmm
     setName = input$set1Name
     taxonOIDs = sets$set1
     
@@ -1025,7 +1038,7 @@ server <- function(input, output, session) {
   })
 
   output$downloadSet2SeqsForSelectedHMMs <- renderText({
-    hmm = dataForHMMTable()[input$resultsByHMMTable_rows_selected]$hmm
+    hmm = hmmTableDataSubset()[input$resultsByHMMTable_rows_selected]$hmm
     setName = input$set2Name
     taxonOIDs = sets$set2
     
@@ -1034,7 +1047,7 @@ server <- function(input, output, session) {
   })
   
   output$linkToMapForSelectedHMM <- renderText({
-    hmm = dataForHMMTable()[input$resultsByHMMTable_rows_selected]$hmm
+    hmm = hmmTableDataSubset()[input$resultsByHMMTable_rows_selected]$hmm
     CreateImagenitMapForm (hmm)
   })
   

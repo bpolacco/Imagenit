@@ -13,4 +13,9 @@ default:
     
     brewerColorPalette: "RdYlBu"
     
+    
+    sourceHtmlR: "./sourceHtml.R"
+    
     mapURL: "/map"
+    
+    

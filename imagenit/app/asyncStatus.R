@@ -1,6 +1,6 @@
 # async file status helpers --------------------
 
-# inspired by, and some parts (almost)shamelessly copied from  http://blog.fellstat.com/?p=407
+# inspired by  http://blog.fellstat.com/?p=407
 # Status File
 
 # setup status keeping environment and pass data object (list)
