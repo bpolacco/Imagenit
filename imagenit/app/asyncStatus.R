@@ -8,18 +8,18 @@
 # for now, nothing but location of the file 
 statusSetup <- function(){
   status_file <- tempfile()
-  print(status_file)
+  print(paste("async status stored in:",status_file))
   write ("initializing",status_file)
   list(status_file = status_file)
 }
 
 
 get_status <- function(statInfo){
-  scan(statInfo$status_file, what = "character",sep="\n")
+  scan(statInfo$status_file, what = "character",sep="\n", quiet=TRUE)
 }
 
 set_status <- function(statInfo, msg){
-  print(msg)
+  #print(msg)
   write(msg,statInfo$status_file)
   statInfo
 }
@@ -48,7 +48,7 @@ interrupted <- function(statInfo){
 
 # Delete file at end of session
 statusCleanUp <- function(statInfo){
-  print(statInfo$status_file)
+  print(paste("statusCleanUp, deleting:", statInfo$status_file))
   if(file.exists(statInfo$status_file))
     unlink(statInfo$status_file)
 }

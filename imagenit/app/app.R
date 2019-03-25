@@ -605,7 +605,8 @@ server <- function(input, output, session) {
       scale_color_discrete(name="Set",
                            breaks=c("set1", "set2"),
                            labels=c(input$set1Name, input$set2Name))  + 
-      scale_x_log10() + scale_y_log10()
+      scale_x_log10() + scale_y_log10() +
+      labs (y = "Total PFAM matches")
     
     
     if (!is.null(selectedPoints$metagenome) ){
@@ -682,23 +683,7 @@ server <- function(input, output, session) {
     }
   })
 
-  observeEvent(input$zoom_button,{ #
-    brush <- input$scatter_brush
-    if (!is.null(brush)) {
-      ranges$x <- c(brush$xmin, brush$xmax)
-      ranges$y <- c(brush$ymin, brush$ymax)
-      
-    } else {
-      ranges$x <- NULL
-      ranges$y <- NULL
-    }
-  })
-  
-  observeEvent(input$zoomOut_button,{
-    ranges$x <- NULL
-    ranges$y <- NULL
-  })
-  
+ 
   observeEvent(input$scatter_brush, { #input$selectRect_button,
     brush <- input$scatter_brush
     if (!is.null(brush)){
@@ -863,7 +848,7 @@ server <- function(input, output, session) {
   
   output$selectedMetagenome_label <- renderText({
     if (isTruthy(selectedPoints$metagenome)){
-    metagenomeInfo[taxon_oid == selectedPoints$metagenome]$GenomeSample_Name
+    paste ("Metagenome in &#9711;:", metagenomeInfo[taxon_oid == selectedPoints$metagenome]$GenomeSample_Name)
     }
     else{"Click on point above or below to see name of metagenome sample here"}
   })
