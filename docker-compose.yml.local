@@ -1,0 +1,19 @@
+version: '2'
+services:
+  app:
+    user: bpolacco
+    image: bpolacco/imagenit
+    volumes:
+    # mount data directories
+    - ./data:/srv/shiny-server/data:ro
+    - ./data-map:/srv/shiny-server/map/data:ro
+    # mounting config files is optional, fully working config files are in images,
+    # but we do it to allow for easy changing the config from the defaults
+    - ./imagenit/app/config.yml:/srv/shiny-server/config.yml:ro
+    - ./imagenit/map/config.yml:/srv/shiny-server/map/config.yml:ro
+  web:
+    image: imagenit-nginx
+    ports:
+    - "80:8080"
+    volumes:
+    - ./web/nginx-proxy.conf:/etc/nginx/conf.d/default.conf:ro
