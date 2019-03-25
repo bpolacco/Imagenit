@@ -866,14 +866,14 @@ server <- function(input, output, session) {
     }
     
     
-    hmmHits = focusedData()
+    hmmHits = dcast(focusedData(), taxon_oid~hmm, value.var="numSeqs")
     
-    for (hm in unique(hmmHits$hmm) ){
-      hmmColumn = hmmHits[hmm == hm, .(taxon_oid, numSeqs)]
-      setnames(hmmColumn, old = "numSeqs", new = hm)
-      metagenomeTable = merge(metagenomeTable, hmmColumn, by = "taxon_oid")
-    }
-    metagenomeTable
+#    for (hm in unique(hmmHits$hmm) ){
+#      hmmColumn = hmmHits[hmm == hm, .(taxon_oid, numSeqs)]
+#      setnames(hmmColumn, old = "numSeqs", new = hm)
+#      metagenomeTable = merge(metagenomeTable, hmmColumn, by = "taxon_oid")
+#    }
+    merge(metagenomeTable, hmmHits, by = "taxon_oid")
   })
   
   
@@ -915,16 +915,18 @@ server <- function(input, output, session) {
     print("hmm Table 1")
     hmmTable = merge (computedData()$hmmStats, allHMMNames(), by = "hmm")
     print("hmm Table 2")
-    hmmHits = dataForChosenSets()
+    #subset the summary then convert to wide format using dcast:
+    hmmHits = dcast(dataForChosenSets()[taxon_oid %in% c(sets$set1, sets$set2), .(taxon_oid,hmm, numSeqs)],
+                    hmm~taxon_oid, value.var="numSeqs")
     print("hmm Table 3")
-    for (tid in c(sets$set1, sets$set2)){
-      taxonColumn = hmmHits[taxon_oid == tid, .(hmm, numSeqs)]
-      setnames(taxonColumn, old = "numSeqs", new = tid)
-      hmmTable = merge(hmmTable, taxonColumn, by = "hmm", all.x=TRUE)
-    }
+#    for (tid in c(sets$set1, sets$set2)){
+#      taxonColumn = hmmHits[taxon_oid == tid, .(hmm, numSeqs)]
+#      setnames(taxonColumn, old = "numSeqs", new = tid)
+#      hmmTable = merge(hmmTable, taxonColumn, by = "hmm", all.x=TRUE)
+#    }
+    hmmTable = merge (hmmTable, hmmHits, by = "hmm")
     print("hmm Table 4")
     hmmTable
-    
   })
   
 
