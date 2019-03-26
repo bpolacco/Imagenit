@@ -2,11 +2,9 @@
 library(shiny)
 library (leaflet)
 library(DT)
+library(shinyjs)
 
-# some global-ish variables... 
-#remoteHMMs <- c()
-#remoteData <- NULL
-#remoteSummaryData <- list()
+library(shinycssloaders)
 
 
 source("./Helpers.R")
@@ -15,8 +13,7 @@ source("./sourceHtml.R")
 
 # Define UI 
 ui <- fluidPage(
-  
-  #source ("./RemoteDataLoad.R", local=TRUE),
+  shinyjs::useShinyjs(),
   
   # Application title
   titlePanel("Imagenit : Metagenome HMM mapper"),
@@ -29,14 +26,16 @@ ui <- fluidPage(
                                                                 "SFLD subgroups"),
                    selected="PFAM domains"),
       #textInput("pfamAccessionEntry", label = "Enter a PFAM Accession (e.g. PF00032)"),
-      conditionalPanel( condition = 'input.hmmType =="SFLD families" ',
+      shinyjs::hidden(
+        div(id="familySelector", #conditionalPanel( condition = 'input.hmmType =="SFLD families" ',
                         selectInput("familySelect", label = h4("Choose an SFLD family"), 
-                                    choices = c("Not working, Please choose PFAM above"))),
-      conditionalPanel( condition = 'input.hmmType =="SFLD subgroups" ',
+                                    choices = c("Not working, Please choose PFAM above")))),
+      shinyjs::hidden(
+        div(id="subgroupSelector", #conditionalPanel( condition = 'input.hmmType =="SFLD subgroups" ',
                         selectInput("subgroupSelect", label = h4("Choose an SFLD subgroup"), 
-                                    choices = c("Not working, Please choose PFAM above"))),
+                                    choices = c("Not working, Please choose PFAM above")))),
       
-      conditionalPanel( condition = 'input.hmmType =="PFAM domains" ',
+      div(id="domainSelector", #conditionalPanel( condition = 'input.hmmType =="PFAM domains" ',
                         selectInput("pfamSelect", label = h4("Choose a PFAM"), 
                                     choices = availablePfam)),
       
@@ -58,7 +57,7 @@ ui <- fluidPage(
     mainPanel(
       tabsetPanel(
         tabPanel("Map View", value="mapPanel",
-                 leafletOutput ("map", height="600px")
+                 leafletOutput ("map", height="600px")  %>% withSpinner(color="#0dc5c1")
         ),
         tabPanel("Table View", value = "table",
                  fluidRow(
@@ -76,10 +75,6 @@ ui <- fluidPage(
 
 
 #
-# This is the server logic of a Shiny web application. 
-
-library(ggplot2)
-
 
 server <- function(input, output, session) {
   #remoteSummaryData = NULL
@@ -105,11 +100,23 @@ server <- function(input, output, session) {
        if (query$hmmType == "sfldSubgroup"){
          
        }
-       
      }
  })
-  
-
+    # manage the hidden selectors
+    observe({
+      shinyjs::hide("subgroupSelector")
+      shinyjs::hide("familySelector")
+      shinyjs::hide("domainSelector")
+      if(input$hmmType =="SFLD subgroups"){
+        shinyjs::show("subgroupSelector")
+      }
+      else if (input$hmmType =="SFLD families"){
+        shinyjs::show("familySelector")
+      }
+      else if(input$hmmType =="PFAM domains"){
+        shinyjs::show("domainSelector")
+      }
+      })
     hmmSelected <- reactiveValues(hmm="pfam00001")
 
     observe({
@@ -120,7 +127,6 @@ server <- function(input, output, session) {
 
   plottedData <- reactive({
       computeMapData(hmmSelected$hmm)
-    
   })
   
 
@@ -146,17 +152,17 @@ server <- function(input, output, session) {
   #histRange <- reactiveValues(range =)
   
 
-  observeEvent(input$map_dblclick, {
-    brush <- input$map_brush
-    if (!is.null(brush)) {
-      ranges$x <- c(brush$xmin, brush$xmax)
-      ranges$y <- c(brush$ymin, brush$ymax)
-      
-    } else {
-      ranges$x <- NULL
-      ranges$y <- NULL
-    }
-  })
+  # observeEvent(input$map_dblclick, {
+  #   brush <- input$map_brush
+  #   if (!is.null(brush)) {
+  #     ranges$x <- c(brush$xmin, brush$xmax)
+  #     ranges$y <- c(brush$ymin, brush$ymax)
+  #     
+  #   } else {
+  #     ranges$x <- NULL
+  #     ranges$y <- NULL
+  #   }
+  # })
   
   
   # use reactiveValues to wrap input$map_bounds because sometimes input$map_bounds is unreasonable
@@ -220,6 +226,11 @@ server <- function(input, output, session) {
       fitBounds (~min(Longitude), ~min(Latitude), ~max(Longitude), ~max(Latitude))
   })
  
+  # observeEvent(hmmSelected,{
+  #   leafletProxy ("map") %>%
+  #     clearMarkers()
+  #   
+  # })
   # draw points on leafletMap based on p value slider, HMM selected, and checkbox
   observe({
     hmm = hmmSelected$hmm

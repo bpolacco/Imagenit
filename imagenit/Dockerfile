@@ -25,7 +25,7 @@ RUN wget --no-verbose https://download3.rstudio.org/ubuntu-14.04/x86_64/VERSION 
 RUN R -e "install.packages(c('shiny','shinydashboard','data.table','DT','ggplot2','RColorBrewer', 'shinyjs', 'promises', 'future', 'config'), repos='http://cran.rstudio.com/')"
 
 #additional needed for map
-RUN R -e "install.packages(c('leaflet'), repos='http://cran.rstudio.com/')"
+RUN R -e "install.packages(c('leaflet', 'shinycssloaders'), repos='http://cran.rstudio.com/')"
 
 
 RUN groupadd -g 5242 m342 && \

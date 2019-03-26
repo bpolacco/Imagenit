@@ -132,15 +132,15 @@ computeMapData = function(hmmName){
 
 
 # function to draw world map on existing ggplot
-drawWorldMap <- function(ggp){
-  ggp + geom_polygon(data = world, 
-                     aes(x=long, y = lat, group = group, text=region),
-                     fill="darkgray",
-                     color="white") + 
-    coord_fixed(1.3) +
-    guides(fill=FALSE)  # do this to leave off the color legend
-  
-}
+# drawWorldMap <- function(ggp){
+#   ggp + geom_polygon(data = world, 
+#                      aes(x=long, y = lat, group = group, text=region),
+#                      fill="darkgray",
+#                      color="white") + 
+#     coord_fixed(1.3) +
+#     guides(fill=FALSE)  # do this to leave off the color legend
+#   
+# }
 
 
 
