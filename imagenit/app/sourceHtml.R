@@ -98,13 +98,17 @@ CreateJGIFormManyPfamManyMetagenome=function(hmm, taxonOIDs, setName){
 ImagenitMapFormTemplate = '
 <form action="%s" method="get" target="_blank">
 <input type="hidden" name="hmm" value ="%s" />
-<input type="hidden" name="hmmType" value = "pfam" />
+<input type="hidden" name="hmmType" value = "%s" />
 
 <input type="submit" value="View selected hmm %s on world map" />
 </form>
 '
 
 CreateImagenitMapForm = function(hmm){
+  if (length(grep("pfam", hmm))>0) hmmType="pfam"
+  else if (length(grep("Subgroup", hmm))>0) hmmType = "sfldSubgroup"
+  else if (length(grep("Family", hmm))>0) hmmType = "sfldFamily"
+  else return(NULL)
   #for now just get the first hmmm
-  sprintf(ImagenitMapFormTemplate, config::get("mapURL"), hmm[1], hmm[1])
+  sprintf(ImagenitMapFormTemplate, config::get("mapURL"), hmm[1], hmmType, hmm[1])
 }

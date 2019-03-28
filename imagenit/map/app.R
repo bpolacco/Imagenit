@@ -99,9 +99,17 @@ server <- function(input, output, session) {
 
        }
        if (query$hmmType == "sfldFamily"){
-         
+         updateRadioButtons(session, "hmmType", selected = "SFLD families")
+         if ( query$hmm %in% familyNames$hmmName){
+           updateSelectInput (session, "familySelect", selected = query$hmm)
+         }
+           
        }
        if (query$hmmType == "sfldSubgroup"){
+         updateRadioButtons(session, "hmmType", selected = "SFLD subgroups")
+         if ( query$hmm %in% subgroupNames$hmmName){
+           updateSelectInput (session, "subgroupSelect", selected = query$hmm)
+         }
          
        }
      }

@@ -1017,19 +1017,23 @@ server <- function(input, output, session) {
   
   output$downloadSet1SeqsForSelectedHMMs <- renderText({
     hmm = hmmTableDataSubset()[input$resultsByHMMTable_rows_selected]$hmm
+    pfams = hmm[grep("pfam", hmm)]
+    if ( length(pfams) == 0 ) return ("")
     setName = input$set1Name
     taxonOIDs = sets$set1
     
-    CreateJGIFormManyPfamManyMetagenome(hmm, taxonOIDs, setName)
+    CreateJGIFormManyPfamManyMetagenome(pfams, taxonOIDs, setName)
     
   })
 
   output$downloadSet2SeqsForSelectedHMMs <- renderText({
     hmm = hmmTableDataSubset()[input$resultsByHMMTable_rows_selected]$hmm
+    pfams = hmm[grep("pfam", hmm)]
+    if ( length(pfams) == 0 ) return ("")
     setName = input$set2Name
     taxonOIDs = sets$set2
     
-    CreateJGIFormManyPfamManyMetagenome(hmm, taxonOIDs, setName)
+    CreateJGIFormManyPfamManyMetagenome(pfams, taxonOIDs, setName)
     
   })
   
