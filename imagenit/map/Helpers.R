@@ -9,9 +9,14 @@ dataFile = function(name){
 }
 
 
-backgroundHMMRate = fread(dataFile("backgroundPfamRateFile")) 
+backgroundHMMRate = rbind(fread(dataFile("backgroundPfamRateFile"))[,.(hmm=pfam, perTotalPfam)],
+                          fread(dataFile("backgroundFamilyRateFile"))[,.(hmm, perTotalPfam)],
+                          fread(dataFile("backgroundSubgroupRateFile"))[,.(hmm, perTotalPfam)]
+                          
+)
+
 pfamInfo = fread (dataFile("pfamInfoFile")) 
-pfamInfo  = merge (pfamInfo, backgroundHMMRate, by.x = "pfamAcc", by.y = "pfam", all.y = TRUE)
+#pfamInfo  = merge (pfamInfo, backgroundHMMRate, by.x = "pfamAcc", by.y = "hmm", all.y = TRUE)
 #pfamInfo[is.na(pfamA_id), :=(pfamA_id = pfamA_acc, description = pfamA_acc)]
 pfamInfo[is.na(pfamA_id), pfamA_id := pfamAcc]
 pfamInfo[is.na(description), description := pfamAcc]
@@ -27,7 +32,7 @@ metagenomeInfo$Longitude[missingLatLong] = seq (-180,180, by = 360/(sum(missingL
 metagenomeInfo$Latitude[missingLatLong] = -90
 
 
-studyNames = fread (dataFile("studyNamesFile"), integer64="character")
+#studyNames = fread (dataFile("studyNamesFile"), integer64="character")
 
 availablePfam = pfamInfo$pfamAcc
 names(availablePfam) = paste ("(PF", substr(pfamInfo$pfamAcc, 5,10), ") ", pfamInfo$description, sep="")
@@ -69,7 +74,7 @@ poissonTestPValue = function(observed, expected){
 	pValue	
 }
 
-
+# store globally the so we don't repeatedly read the same data
 hmmData = list()
 
 getPfamHMMFileName = function (hmm){
@@ -81,23 +86,44 @@ getPfamHMMFileName = function (hmm){
   sprintf (dataFile("hmmSummaryFileF"), substr(hmm,1,nchar(hmm)-1))
   
 }
+LoadPfamSummary <- function(hmm){    
+  summaryData = NULL
+  tryCatch({
+    summaryData = fread(getPfamHMMFileName(hmm), integer64="character")[pfam==hmm]
+  }, error = function(e){
+    print(e)
+    summaryData <<- NULL
+  })
+  #easier here then editing my 10K files
+  setNames(summaryData, c("hmm", "taxon_oid","numSeqs", "sumCoverage"))
+}
+
+#load whole table into memory, subset table based on hmm
+familyHitCountsFull <- NULL
+LoadFamilySummary <- function(hmmIn){
+  if (is.null(familyHitCountsFull)){
+    familyHitCountsFull <<- fread (dataFile("sfldFamilyHitCountsFile"), integer64="character")
+  }
+  familyHitCountsFull[hmm==hmmIn]
+}
+
+#load whole table into memory, subset table based on hmm
+subgroupHitCountsFull <- NULL
+LoadSubgroupSummary <- function(hmmIn){
+  if (is.null(subgroupHitCountsFull)){
+    subgroupHitCountsFull <<- fread (dataFile("sfldSubgroupHitCountsFile"), integer64="character")
+  }
+  subgroupHitCountsFull[hmm==hmmIn]
+}
 
 getHMMData = function (hmm){
-  if (!is.null(hmmData[[hmm]])){
-    summaryData = hmmData[[hmm]]
+  if (is.null(hmmData[[hmm]])){
+    if (length(grep ("pfam", hmm))){loader = LoadPfamSummary }
+    else if (length(grep("Family_",hmm))){loader = LoadFamilySummary }
+    else if (length(grep("Subgroup_",hmm))){loader = LoadSubgroupSummary }
+    hmmData[[hmm]] <<- loader(hmm)
   }
-  else{
-    #hmmSummaryFileFormat = "./data/shortSummariesPerHMM/%s/hmm.%s.csv"
-    tryCatch({
-      #todo fix this so it works for sfld hmms as well...a
-      summaryData = fread(getPfamHMMFileName(hmm), integer64="character")[pfam==hmm]
-      hmmData[[hmm]] = summaryData 
-    }, error = function(e){
-      summaryData <<- NULL
-    })
-  }
-
-  summaryData
+  hmmData[[hmm]]
 }
 
 
@@ -109,20 +135,24 @@ getHMMData = function (hmm){
 computeMapData = function(hmmName){
   
   hmmData = getHMMData(hmm=hmmName)
-  req(hmmData)
+  if (is.null(hmmData)){
+    return (NULL)
+  }
   
+  str(hmmData)
   #get a subset of the summary data specific to a single pfam, and merge with the metagenomeInfo
   #mergedData = merge ( metagenomeInfo, summaryDataLong[pfam==hmmName], by.x = "taxon_oid", by.y = "taxonOID", all.x = TRUE)
-  mergedData = merge ( metagenomeInfo, hmmData, by.x = "taxon_oid", by.y = "taxonOID", all.x = TRUE)
-  
-  mergedData[is.na(numGenes), numGenes := 0]
+  mergedData = merge ( metagenomeInfo, hmmData, by.x = "taxon_oid", by.y = "taxon_oid", all.x = TRUE)
+  str(mergedData)
+  mergedData[is.na(numSeqs), numSeqs := 0]
   
   #get expectedCount which is simply totalPfam hits per metagenome times global fraction of all pfam hits  to this hmm
-  mergedData[,expectedCount := totalPfamCount * backgroundHMMRate[pfam==hmmName, perTotalPfam]]
-  mergedData$log2Ratio = log2((mergedData$numGenes+1)/(mergedData$expectedCount+1))
+  mergedData[,expectedCount := totalPfamCount * backgroundHMMRate[hmm==hmmName, perTotalPfam]]
+  mergedData$log2Ratio = log2((mergedData$numSeqs+1)/(mergedData$expectedCount+1))
+  str(mergedData)
   mergedData$poissonTestScore = with(mergedData,
                                      {
-                                       poissonTestOnArrays(numGenes,expectedCount) 
+                                       poissonTestOnArrays(numSeqs,expectedCount) 
                                      }
   )
   mergedData
@@ -130,21 +160,57 @@ computeMapData = function(hmmName){
 
 
 
-
-# function to draw world map on existing ggplot
-# drawWorldMap <- function(ggp){
-#   ggp + geom_polygon(data = world, 
-#                      aes(x=long, y = lat, group = group, text=region),
-#                      fill="darkgray",
-#                      color="white") + 
-#     coord_fixed(1.3) +
-#     guides(fill=FALSE)  # do this to leave off the color legend
-#   
-# }
-
-
-
 colorsGrad = colorRampPalette(rev(brewer.pal(11,config$brewerColorPalette)))(22)
 
 
+
+#format the SFLD subgroup names with superfamily information
+
+subgroupNames = as.data.table( read.csv(dataFile("sfldSubgroupsNamesFile"), header=TRUE, sep="\t") )
+subgroupNames$hmmName = with(subgroupNames,
+                             {paste(Superfamily_ID, 
+                                    ".Subgroup_", 
+                                    Subgroup_ID, 
+                                    sep="")
+                             }
+)
+
+subgroupNames$dispText = with(subgroupNames,
+                              {paste(superfamily,
+                                     "--",
+                                     subgroup
+                              )
+                              }
+)
+
+#this structure is used for the subgroup selection box. 
+# result is a list of named vectors of hmm ids. Each item in the list
+# is all subgroups per a superfamily. 
+namedSubgroups = with(subgroupNames[, .(hmmName, subgroup, superfamily)],
+                      split(setNames(as.character(hmmName), subgroup), superfamily)
+)
+
+#format the SFLD family names with superfamily information
+familyNames = as.data.table( read.csv(dataFile("sfldFamiliesNamesFile"), header=TRUE, sep="\t") )
+familyNames$hmmName = with(familyNames,
+                           {paste(Superfamily_ID, 
+                                  ".Family_", 
+                                  Family_ID, 
+                                  sep="")
+                           }
+)
+
+familyNames$dispText = with(familyNames,
+                            {paste(superfamily,
+                                   "--",
+                                   family)
+                            }
+)
+
+#this structure is used for the family selection box. 
+# result is a list of named vectors of hmm ids. Each item in the list
+# is all familys per a superfamily. 
+namedFamilies = with(familyNames[, .(hmmName, family, superfamily)],
+                     split(setNames(as.character(hmmName), family), superfamily)
+)
 

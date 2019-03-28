@@ -4,9 +4,15 @@ default:
     backgroundPfamRateFile: "backgroundPFAMRate.txt"
     pfamInfoFile: "pfamInfo.txt"
     metagenomeInfoFile: "metagenomeInfo.txt"
-    studyNamesFile: "studyNamesByTaxonOID.csv"
     hmmSummaryFileF: "shortSummariesCombinedPerHMM/hmm.%s.csv"
-
+    
+    sfldSubgroupsNamesFile: "sfldSubgroupsNames.txt"
+    sfldFamiliesNamesFile: "sfldFamiliesNames.txt"
+    sfldSubgroupHitCountsFile: "sfldSubgroupHitCounts.txt"
+    sfldFamilyHitCountsFile: "sfldFamilyHitCounts.txt"
+    backgroundFamilyRateFile: "backgroundFamilyRate.txt"
+    backgroundSubgroupRateFile: "backgroundSubgroupRate.txt"
+    
     brewerColorPalette: "RdYlBu"
     
     mapURL: "https://enzyme.shinyapps.io/Imagenit_map/Imagenit_map"
