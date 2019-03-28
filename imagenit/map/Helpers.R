@@ -139,17 +139,13 @@ computeMapData = function(hmmName){
     return (NULL)
   }
   
-  str(hmmData)
-  #get a subset of the summary data specific to a single pfam, and merge with the metagenomeInfo
-  #mergedData = merge ( metagenomeInfo, summaryDataLong[pfam==hmmName], by.x = "taxon_oid", by.y = "taxonOID", all.x = TRUE)
+  #merge with the metagenomeInfo which lets us fill out zeros and compute expected counts
   mergedData = merge ( metagenomeInfo, hmmData, by.x = "taxon_oid", by.y = "taxon_oid", all.x = TRUE)
-  str(mergedData)
   mergedData[is.na(numSeqs), numSeqs := 0]
   
   #get expectedCount which is simply totalPfam hits per metagenome times global fraction of all pfam hits  to this hmm
   mergedData[,expectedCount := totalPfamCount * backgroundHMMRate[hmm==hmmName, perTotalPfam]]
   mergedData$log2Ratio = log2((mergedData$numSeqs+1)/(mergedData$expectedCount+1))
-  str(mergedData)
   mergedData$poissonTestScore = with(mergedData,
                                      {
                                        poissonTestOnArrays(numSeqs,expectedCount) 
