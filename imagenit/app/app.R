@@ -5,7 +5,7 @@
 library(shiny)
 library (shinyjs)
 library (data.table)
-#library (qvalue)
+library (qvalue)
 
 library(promises)
 library(future)
@@ -90,6 +90,7 @@ ui <- fluidPage(
                       HTML ("<strong>Size and PFAM counts in selected metagenomes</strong>"),
                       fluidRow(plotOutput("metagenomesInSetsPlot",
                                           click = "metagenomeScatter_click")),
+                      downloadButton("downloadMetagenomeScatter", "Download as PDF"),
                       htmlOutput("selectedMetagenome_label")
                       
                       ),
@@ -105,12 +106,13 @@ ui <- fluidPage(
                                    ))),
                       fluidRow(column (6,
                         actionButton("clearSelect_button", "Clear Selection"),
+                        downloadButton("downloadHMMScatter", "Download as PDF"),
                         htmlOutput("scatter_pfamLabel"),
                         HTML ("<p> Selected points (double click, or drag a rectangle to select multiple) above appear in detail plot below </p>")
                         ),
                         column(6,
                                 HTML ("Use slider to limit HMMs by significance"),
-                        sliderInput('qValueSelector', label="max log10(pValue)",
+                        sliderInput('qValueSelector', label="max log10(q-value)",
                                      max = 0, min=-20, value=-2)
                         )
                       ),
@@ -128,9 +130,11 @@ ui <- fluidPage(
                                              resetOnNew = TRUE
                                            )
                                            ),
-                             radioButtons("rateOrCount_radioButtons", label = "X axis shows", 
+                             fluidRow(column(6,radioButtons("rateOrCount_radioButtons", label = "X axis shows", 
                                           choices = c("Rate of sequences" = "rate","Count of sequences" = "count"),
-                                          inline=TRUE)
+                                          inline=TRUE)),
+                                      column(6,downloadButton("downloadDetailPlot", label = "Download as PDF"))
+                             )
                              )
                       
                       )
@@ -433,7 +437,7 @@ server <- function(input, output, session) {
   nclicks = reactiveVal(0)
 
   output$statusText <- renderText ({
-    #not sure if this is necessary/functional, but putting this call to asyncData here
+    #not sure if this is necessary/functional, but putting this request to read asyncData here
     # is meant to invalidate statusText when asyncData changes so that we dont' have to 
     # worry about timing/order of setting nclicks 
     asyncData()
@@ -554,8 +558,8 @@ server <- function(input, output, session) {
                       meanSet1 = numeric(n), 
                       meanSet2 = numeric(n), 
                       ratioLog2 = numeric(n), 
-                      pValue = numeric(n)#, 
-                      #qValue = numeric(n)
+                      pValue = numeric(n), 
+                      qValue = numeric(n)
       )
       for (i in 1:n){
         #hmm = names(dataByHMM)[i]
@@ -573,6 +577,8 @@ server <- function(input, output, session) {
           if (!is.null(statusFUN)) statusFUN(sprintf("Comparing HMMSEARCH results, calculating statistics  %d%% done", round(i/n * 100)))
         }
       }
+  if (!is.null(statusFUN)) statusFUN("Comparing HMMSEARCH results, calculating q-values")
+  df$qValue = qvalue::qvalue(df$pValue)$qvalues
   list(hmmMatchTable = workingData, hmmStats = df)    
   }
   
@@ -598,7 +604,12 @@ server <- function(input, output, session) {
     
   })
   
+  # _metagenome scatter -------------------------------
   output$metagenomesInSetsPlot <- renderPlot({
+    metagenomeScatter()
+  })
+  
+  metagenomeScatter <- reactive ({
     #plot(totalPfamCount~Genome_Size_assembled, data = metagenomes, color = condition)
     ggp = ggplot(data=selectedMetagenomes()) + 
       geom_point(aes(x=Gene_Count_assembled, y=totalPfamCount, color = condition)) +
@@ -617,8 +628,21 @@ server <- function(input, output, session) {
     
   })  
 
+  output$downloadMetagenomeScatter <- downloadHandler(
+    filename = function(){
+      paste ("metagenomeScatter",
+             input$set1Name, input$set2Name,
+             Sys.Date(), "pdf", sep="." )
+    },
+    content = function(file) {
+      ggsave(file, plot = metagenomeScatter(), height=6, width=8)
+    }
+  )
+  
+  
   observeEvent(input$metagenomeScatter_click,{
-    clickedPoint = nearPoints(selectedMetagenomes(),coordinfo=input$metagenomeScatter_click, maxpoints=1)
+    clickedPoint = nearPoints(selectedMetagenomes(),coordinfo=input$metagenomeScatter_click, 
+                              maxpoints=1)
     if (length(clickedPoint) > 0){
       selectedPoints$metagenome = clickedPoint[1]$taxon_oid
       
@@ -630,7 +654,8 @@ server <- function(input, output, session) {
       selectedPoints$metagenome = NULL
     }
   })
-    
+  
+  # _HMM scatter ----------------------------
   observeEvent (computedData(),{
     #for now use pValues despite name
     r = range(log10(computedData()$hmmStats$pValue[computedData()$hmmStats$pValue > 0]))
@@ -638,17 +663,13 @@ server <- function(input, output, session) {
   })
   
   subsetStats = reactive({
-    computedData()$hmmStats[pValue < (10^input$qValueSelector)]
+    computedData()$hmmStats[qValue < (10^input$qValueSelector)]
   })
   
-  ranges <- reactiveValues(x = NULL, y = NULL)
+  ranges <- reactiveValues(x = NULL, y = NULL)   #obsolete
   selectedPoints <- reactiveValues(points=NULL, metagenome=NULL)
   
   
-  # calculateQValues=function(subsetData){
-  #   subsetData %>% split(subsetData$hmm) %>% lapply (pPoisson) %>% unlist %>% qvalue()
-  # }
-
   selectPoints <- function(rows, toggle=FALSE){
     if (nrow(rows) > 0){
       if(is.null(selectedPoints$points) || dim(selectedPoints$points)[1]==0){
@@ -694,22 +715,23 @@ server <- function(input, output, session) {
   observeEvent(input$clearSelect_button,{
     selectedPoints$points = NULL
   })
-  
 
-  observeEvent(input$results_click, {
-    clickedPoint = nearPoints(focusedData(),coordinfo=input$results_click, maxpoints=1)
-    if (length(clickedPoint) > 0){
-      selectedPoints$metagenome = clickedPoint[1]$taxon_oid
+  output$scatter_pfamLabel <- renderText({
+    pointStr = "Hover over point above to see HMM name"
+    if (!is.null(input$scatter_hover)){
+      point = nearPoints(computedData()$hmmStats,input$scatter_hover,  maxpoints=1)
+      if (nrow(point) > 0){
+        hmm = point[1,]$hmm
+        pointStr = pfamInfoString(hmm)
+      }
     }
-    else{
-      selectedPoints$metagenome = NULL
-    }
+    pointStr
   })
-  
-    
-
     
   output$resultsScatter <- renderPlot({
+    hmmScatter()
+  })
+  hmmScatter <- reactive ({
     stats = subsetStats()
     req(stats)
     ggp = ggplot (data = stats) +
@@ -731,6 +753,17 @@ server <- function(input, output, session) {
     ggp = ggp + geom_line(data=data.frame(x=x4line, y=x4line), aes(x=x,y=y), linetype=2)
     ggp
   })
+
+  output$downloadHMMScatter <- downloadHandler(
+    filename = function(){
+      paste ("hmmScatter",
+             input$set1Name, input$set2Name,
+             Sys.Date(), "pdf", sep="." )
+    },
+    content = function(file) {
+      ggsave(file, plot = hmmScatter(), height=6, width=8)
+    }
+  )
   
 
   focusedData = reactive({
@@ -738,6 +771,7 @@ server <- function(input, output, session) {
     dataForChosenSets()[hmm %in% selectedPoints$points$hmm][, hmm:=droplevels(hmm)]
   })
 
+  
   selectedHMMNames = reactive({
     ydata <- pfamInfo[pfamAcc %in% levels(focusedData()$hmm), .(pfamAcc, description)]
     ydata <- rbind (ydata, subgroupNames[hmmAcc %in% levels(focusedData()$hmm),
@@ -766,8 +800,14 @@ server <- function(input, output, session) {
     ydata
     
   })
-        
+  
+  # _data detail plot --------------------
   output$resultsPlot <- renderPlot({
+    resultsDetailPlot()
+  }, width=1300)
+  
+  resultsDetailPlot <- reactive ({
+  
     req(selectedPoints$points)
     #plotData = dataForChosenSets()
     ydata = selectedHMMNames()
@@ -807,7 +847,7 @@ server <- function(input, output, session) {
     
     ggp = ggp + ylab("")+
       
-      theme(axis.text.y=element_text(size=12, face ="bold"))+
+      theme(axis.text.y=element_text(size=12, face ="bold"), legend.text=element_text(size=rel(1.0)))+
       scale_color_discrete(name="Set",
                           breaks=c("set1", "set2"),
                           labels=c(input$set1Name, input$set2Name)) +
@@ -818,20 +858,18 @@ server <- function(input, output, session) {
     ggp = ggp + theme(legend.position="top")
     
     ggp
-  }, width = 1300)
-  
-  
-  output$scatter_pfamLabel <- renderText({
-    pointStr = "Hover over point above to see HMM name"
-    if (!is.null(input$scatter_hover)){
-      point = nearPoints(computedData()$hmmStats,input$scatter_hover,  maxpoints=1)
-      if (nrow(point) > 0){
-        hmm = point[1,]$hmm
-        pointStr = pfamInfoString(hmm)
-      }
-    }
-    pointStr
   })
+
+  observeEvent(input$results_click, {
+    clickedPoint = nearPoints(focusedData(),coordinfo=input$results_click, maxpoints=1)
+    if (length(clickedPoint) > 0){
+      selectedPoints$metagenome = clickedPoint[1]$taxon_oid
+    }
+    else{
+      selectedPoints$metagenome = NULL
+    }
+  })
+  
   
   output$results_metagenomeLabel <- renderText({
     pointStr = "test2"
@@ -852,6 +890,17 @@ server <- function(input, output, session) {
     }
     else{"Click on point above or below to see name of metagenome sample here"}
   })
+  
+  output$downloadDetailPlot <- downloadHandler(
+    filename = function(){
+      paste ("resultsDetail",
+             input$set1Name, input$set2Name,
+             Sys.Date(), "pdf", sep="." )
+    },
+    content = function(file) {
+      ggsave(file, plot = resultsDetailPlot(), height=6, width=20)
+    }
+  )
 
   ##  results and download page  -----------------------------
   
@@ -935,7 +984,7 @@ server <- function(input, output, session) {
     if (input$radioButtons_HowManyHMMRows == "selected"){
       subTab = fullTable[hmm %in% selectedPoints$points$hmm]
     } else if (input$radioButtons_HowManyHMMRows == "plotted"){
-      subTab = fullTable[hmm %in%  computedData()$hmmStats[pValue < (10^input$qValueSelector)]$hmm]
+      subTab = fullTable[hmm %in%  computedData()$hmmStats[qValue < (10^input$qValueSelector)]$hmm]
     } else if (input$radioButtons_HowManyHMMRows == "all"){
       subTab = fullTable
     }
@@ -981,6 +1030,7 @@ server <- function(input, output, session) {
       DT::formatSignif(columns=c(meanSet1ColName,
                              meanSet2ColName,
                              'pValue',
+                             'qValue',
                              'log2 ratio'),
                    digits=2)
   })

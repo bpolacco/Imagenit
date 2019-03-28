@@ -27,6 +27,9 @@ RUN R -e "install.packages(c('shiny','shinydashboard','data.table','DT','ggplot2
 #additional needed for map
 RUN R -e "install.packages(c('leaflet', 'shinycssloaders'), repos='http://cran.rstudio.com/')"
 
+# qvalue installed from BioConductor
+RUN R -e "install.packages('BiocManager'); BiocManager::install('qvalue', version = '3.8')"
+
 
 RUN groupadd -g 5242 m342 && \
   useradd -u 75132 -g 5242 bpolacco
