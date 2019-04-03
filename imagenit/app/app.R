@@ -162,6 +162,7 @@ ui <- fluidPage(
                                       htmlOutput("linkToMapForSelectedHMM")
                                     )
                                     ),
+                                  fluidRow(htmlOutput("hmmTableMessage")),
                                   DT::dataTableOutput("resultsByHMMTable")
                                   )
                           )
@@ -914,15 +915,11 @@ server <- function(input, output, session) {
       metagenomeTable[condition == "set2", condition := input$set2Name]
     }
     
-    
+    if (length(selectedPoints$points) > 0) {
     hmmHits = dcast(focusedData(), taxon_oid~hmm, value.var="numSeqs")
-    
-#    for (hm in unique(hmmHits$hmm) ){
-#      hmmColumn = hmmHits[hmm == hm, .(taxon_oid, numSeqs)]
-#      setnames(hmmColumn, old = "numSeqs", new = hm)
-#      metagenomeTable = merge(metagenomeTable, hmmColumn, by = "taxon_oid")
-#    }
-    merge(metagenomeTable, hmmHits, by = "taxon_oid")
+    return (merge(metagenomeTable, hmmHits, by = "taxon_oid") )
+    }
+    else return (metagenomeTable)
   })
   
   
@@ -1092,6 +1089,9 @@ server <- function(input, output, session) {
     CreateImagenitMapForm (hmm)
   })
   
+  output$hmmTableMessage <- renderText({
+    hmmTableMessageHTML
+  })
   
 }
 
