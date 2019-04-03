@@ -658,8 +658,7 @@ server <- function(input, output, session) {
   
   # _HMM scatter ----------------------------
   observeEvent (computedData(),{
-    #for now use pValues despite name
-    r = range(log10(computedData()$hmmStats$pValue[computedData()$hmmStats$pValue > 0]))
+    r = range(log10(computedData()$hmmStats$qValue[computedData()$hmmStats$qValue > 0]))
     updateSliderInput(session, 'qValueSelector', min = floor(r[1]), max=ceiling(r[2]))
   })
   
@@ -736,7 +735,7 @@ server <- function(input, output, session) {
     stats = subsetStats()
     req(stats)
     ggp = ggplot (data = stats) +
-      geom_point (aes(x=meanSet2, y=meanSet1, color=log10(pValue)), alpha=0.5
+      geom_point (aes(x=meanSet2, y=meanSet1, color=log10(qValue)), alpha=0.5
       ) + scale_x_log10() + scale_y_log10()
     if (!is.null(selectedPoints$points) & length(selectedPoints$points) > 0){
       ggp = ggp + geom_point(aes(x=meanSet2, y=meanSet1),data=selectedPoints$points,  size=5, shape=23)
