@@ -1014,7 +1014,7 @@ server <- function(input, output, session) {
                             orderClasses=TRUE, #highlight the ordered column
                             autoWidth=TRUE, scrollX=TRUE,  #needed to set width below
                             columnDefs = list(list(
-                              targets = c(5),
+                              targets = c(6),
                               width="300px"
                             ))
                     )
