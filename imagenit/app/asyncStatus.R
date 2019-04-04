@@ -31,6 +31,7 @@ fire_interrupt <- function(statInfo){
 
 fire_ready <- function(statInfo){
   set_status(statInfo,"Ready")
+  statInfo
 }
 
 fire_running <- function(statInfo, perc_complete){

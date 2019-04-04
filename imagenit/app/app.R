@@ -368,7 +368,7 @@ server <- function(input, output, session) {
   observeEvent(input$addToSet1Button, {
     req(input$selectionTable_rows_selected)
     s = metaData[input$selectionTable_rows_selected,taxon_oid,]
-    selectRows(selectionTableProxy, NULL)
+    DT::selectRows(selectionTableProxy, NULL)
     sdiff = setdiff(s, sets$set2)
     if (length(sdiff)  != length(s)){
       showNotification("Some metagenomes already in other set, not added", type = "warning") 
@@ -379,7 +379,7 @@ server <- function(input, output, session) {
   observeEvent(input$addToSet2Button, {
     req(input$selectionTable_rows_selected)
     s = metaData[input$selectionTable_rows_selected,taxon_oid,]
-    selectRows(selectionTableProxy, NULL)
+    DT::selectRows(selectionTableProxy, NULL)
     sdiff = setdiff(s, sets$set1)
     if (length(sdiff)  != length(s)){
      showNotification("Some metagenomes already in other set, not added", type = "warning") 
