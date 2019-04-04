@@ -7,7 +7,7 @@ services:
     cap_drop:
     - ALL
     retain_ip: true
-    image: registry.spin.nersc.gov/bpolacco/imagenit:0.2.4
+    image: registry.spin.nersc.gov/bpolacco/imagenit:0.3.0
     volumes:
     # mount data directories
     - /global/project/projectdirs/jgimg/babbitt/imagenit//data:/srv/shiny-server/data:ro
