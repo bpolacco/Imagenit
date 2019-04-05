@@ -5,6 +5,7 @@ In brief: an IMG/M metagenome analysis and exploration tool. [Pfam](https://pfam
 
 Visit https://imagenit.jgi.doe.gov/ for live interactive tools.  [There  is a tutorial available on Google Docs](https://docs.google.com/document/d/1k6VjmhIgy6v9NJ3PKgAUi8aJdAa0k62cKZSZROUE0Sc/edit?usp=sharing)
 
+### Running on your own computer
 Tools are packaged in a [docker container](https://hub.docker.com/r/bpolacco/imagenit) with separate data (see the *tar.gz files).
 
 To run on your own machine, you must have [Docker](https://docs.docker.com/) installed and local copies of the data files.  Easiest if you have git and git-lfs installed is to clone the repository, expand the data directories, then use docker-compose to run
