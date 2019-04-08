@@ -12,7 +12,7 @@ services:
     - ./imagenit/app/config.yml:/srv/shiny-server/config.yml:ro
     - ./imagenit/map/config.yml:/srv/shiny-server/map/config.yml:ro
   web:
-    image: imagenit-nginx
+    image: bpolacco/imagenit-nginx
     ports:
     - "80:8080"
     volumes:
