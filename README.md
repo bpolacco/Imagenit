@@ -1,48 +1,42 @@
 # Imagenit
 
-In brief: an IMG/M metagenome analysis and exploration tool. PFAM and SFLD HMMs were matched across ~8000 metagenomes in IMG.  The results can be explored using these tools. 
+# version 0.3
+In brief: an IMG/M metagenome analysis and exploration tool. [Pfam](https://pfam.xfam.org/) and [SFLD](http://sfld.rbvi.ucsf.edu) HMMs were matched across ~8000 metagenomes in [IMG/M](https://img.jgi.doe.gov/).  The results can be explored using Imagenit tools.
 
-The tools and hosting are in development.  For now, access docker images at:
+Visit https://imagenit.jgi.doe.gov/ for live interactive tools.  [There  is a tutorial available on Google Docs](https://docs.google.com/document/d/1k6VjmhIgy6v9NJ3PKgAUi8aJdAa0k62cKZSZROUE0Sc/edit?usp=sharing)
 
-[https://hub.docker.com/r/bpolacco/imagenit](https://hub.docker.com/r/bpolacco/imagenit)
+### Running on your own computer
+Tools are packaged in a [docker container](https://hub.docker.com/r/bpolacco/imagenit) with separate data (see the *tar.gz files).
 
-[https://hub.docker.com/r/bpolacco/imagenit_map](https://hub.docker.com/r/bpolacco/imagenit_map)
-
-If you have [Docker](https://docs.docker.com/) installed, you can run these by<sup>[1](#myfootnote1)</sup>:
-
-```
-docker run --rm --detach -p 80:80 bpolacco/imagenit:version0.11
-docker run --rm --detach -p 1717:80 bpolacco/imagenit_map:version0.1
+To run on your own machine, you must have [Docker](https://docs.docker.com/) installed and local copies of the data files.  Easiest if you have git and git-lfs installed is to clone the repository, expand the data directories, then use docker-compose to run
 
 ```
-
-
-Then point your browser to 
-
-[http://localhost](http://localhost)
-and
-[http://localhost:1717](http://localhost:1717)
-
-
-
-# version 0.2
-
-This version, the first commit/push to github, has been built for hosting on NERSC's spin. To run locally, clone the repository, expand the data directories, then use docker-compose to run
-
-```
-git clone https://github.com/bpolacco/Imagenit
+git lfs clone https://github.com/bpolacco/Imagenit
 cd Imagenit
 tar xzf data.tar.gz
 tar xzf data-map.tar.gz
+ln -s docker-compose.yml.local docker.compose.yml
 docker-compose up
 ```
 
-I use git lfs to manage the large data files. You may need to install this extension to make this work--I haven't tested it without.
+Then visit http://localhost in your browser. The above container stack includes an nginx web server at port 80 as a front end to the Shiny Server in the Imagenit container.  
 
-Then point your browser to<sup>[1](#myfootnote1)</sup> 
-[http://localhost](http://localhost)
-and
-[http://localhost/map](http://localhost/map)
+Without git, or if you don't want to run the full stack above, download and expand just the *tar.gz files via the browser, then issue the following command.
 
+```
+docker run --rm --detach -p 5000:5000 -v /full/path/to/data:/srv/shiny-server/data:ro -v /full/path/to/data-map:/srv/shiny-server/map/data:ro  bpolacco/imagenit:0.3.0
+```
+Then visit http://localhost:5000
+This requires port 5000 be available on your computer (which it probably is). If not, and you see an error about the port already used/allocated/bound, try a different port:
 
-<a name="myfootnote1">1</a>: If you have a web server or other service using ports 80 or 1717 the above commands will fail.  Simply change the 80: or 1717: to another random number and modify the urls below appropriately.
+```
+docker run --rm --detach -p 5050:5000 -v /full/path/to/data:/srv/shiny-server/data:ro -v /full/path/to/data-map:/srv/shiny-server/map/data:ro  bpolacco/imagenit:0.3.0
+```
+Then visit http://localhost:5050
+
+Of course, you'll also need to replace /full/path/to/data with the actual path.  Something like the following on Mac OSX if your username is *benn*, and you leave the data files right where the browser downloads and expands them.
+
+```
+docker run --rm --detach -p 5050:5000 -v /Users/benn/Downloads/data:/srv/shiny-server/data:ro -v /Users/benn/Downloads/data-map:/srv/shiny-server/map/data:ro  bpolacco/imagenit:0.3.0
+```
+
