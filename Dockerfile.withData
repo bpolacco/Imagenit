@@ -1,0 +1,7 @@
+FROM bpolacco/imagenit:0.3.0
+
+COPY ./data/ /srv/shiny-server/data/
+COPY ./data-map/ /srv/shiny-server/map/data/
+
+CMD ["/usr/bin/shiny-server.sh"]
+
