@@ -8,35 +8,24 @@ Visit https://imagenit.jgi.doe.gov/ for live interactive tools.  [There  is a tu
 ### Running on your own computer
 Tools are packaged in a [docker container](https://hub.docker.com/r/bpolacco/imagenit) with separate data (see the *tar.gz files).
 
-To run on your own machine, you must have [Docker](https://docs.docker.com/) installed and local copies of the data files.  Easiest if you have git and git-lfs installed is to clone the repository, expand the data directories, then use docker-compose to run
+To run on your own machine, you must have a recent [Docker](https://docs.docker.com/) installed.  The easiest is to use the docker image with embedded data with the following single command.
 
 ```
-git lfs clone https://github.com/bpolacco/Imagenit
+docker run --rm --detach -p 5000:5000 bpolacco/imagenit-wdata
+```
+Then visit http://localhost:5000 in your browser. If you see an error about the port not being available, change 5000:5000 to something else, such as 5001:5000, then update the url to http://localhost:5001 or whatever number you settled.  Old versions of Docker may require that you connect to http://192.168.99.100:5000 instead.  
+
+Advanced git and docker users could configure as they wish, and use local copies of the data files by cloning the repository, 
+expanding the data directories, then use docker-compose to run:
+
+```
+git lfs install #confirm you have git-lfs ready to go
+git clone https://github.com/bpolacco/Imagenit
 cd Imagenit
 tar xzf data.tar.gz
 tar xzf data-map.tar.gz
-ln -s docker-compose.yml.local docker.compose.yml
+mv docker-compose.yml.local docker.compose.yml
 docker-compose up
 ```
 
-Then visit http://localhost in your browser. The above container stack includes an nginx web server at port 80 as a front end to the Shiny Server in the Imagenit container.  
-
-Without git, or if you don't want to run the full stack above, download and expand just the *tar.gz files via the browser, then issue the following command.
-
-```
-docker run --rm --detach -p 5000:5000 -v /full/path/to/data:/srv/shiny-server/data:ro -v /full/path/to/data-map:/srv/shiny-server/map/data:ro  bpolacco/imagenit:0.3.0
-```
-Then visit http://localhost:5000
-This requires port 5000 be available on your computer (which it probably is). If not, and you see an error about the port already used/allocated/bound, try a different port:
-
-```
-docker run --rm --detach -p 5050:5000 -v /full/path/to/data:/srv/shiny-server/data:ro -v /full/path/to/data-map:/srv/shiny-server/map/data:ro  bpolacco/imagenit:0.3.0
-```
-Then visit http://localhost:5050
-
-Of course, you'll also need to replace /full/path/to/data with the actual path.  Something like the following on Mac OSX if your username is *benn*, and you leave the data files right where the browser downloads and expands them.
-
-```
-docker run --rm --detach -p 5050:5000 -v /Users/benn/Downloads/data:/srv/shiny-server/data:ro -v /Users/benn/Downloads/data-map:/srv/shiny-server/map/data:ro  bpolacco/imagenit:0.3.0
-```
-
+The above container stack includes an nginx web server at port 80 as a front end to the Shiny Server in the Imagenit container. There are many options to run the just the bpolacco/imagenit image, or even to use and modify the included Dockerfiles to build your own images.
