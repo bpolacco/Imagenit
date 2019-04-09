@@ -105,7 +105,7 @@ ui <- fluidPage(
                                      resetOnNew = TRUE
                                    ))),
                       fluidRow(column (6,
-                        actionButton("clearSelect_button", "Clear Selection"),
+                        actionButton("clearSelect_button", "Clear Highlighting"),
                         downloadButton("downloadHMMScatter", "Download as PDF"),
                         htmlOutput("scatter_pfamLabel"),
                         HTML ("<p> Selected points (double click, or drag a rectangle to select multiple) above appear in detail plot below </p>")
@@ -611,14 +611,20 @@ server <- function(input, output, session) {
   })
   
   metagenomeScatter <- reactive ({
+    xRange = range(selectedMetagenomes()$Gene_Count_assembled)
+    yRange = range(selectedMetagenomes()$totalPfamCount)
     #plot(totalPfamCount~Genome_Size_assembled, data = metagenomes, color = condition)
     ggp = ggplot(data=selectedMetagenomes()) + 
       geom_point(aes(x=Gene_Count_assembled, y=totalPfamCount, color = condition)) +
       scale_color_discrete(name="Set",
                            breaks=c("set1", "set2"),
                            labels=c(input$set1Name, input$set2Name))  + 
-      scale_x_log10() + scale_y_log10() +
-      labs (y = "Total PFAM matches")
+      scale_x_log10(
+                    limits = niceLimitsInLog10Space(xRange) #c(5e5, 2e6)#expand=expand_scale(0.4)
+      ) + scale_y_log10(limits = niceLimitsInLog10Space(yRange)
+      ) +
+      labs (y = "Total PFAM matches")  +
+      annotation_logticks(sides = "trbl") + theme(panel.grid.minor = element_blank())
     
     
     if (!is.null(selectedPoints$metagenome) ){
@@ -674,14 +680,16 @@ server <- function(input, output, session) {
     if (nrow(rows) > 0){
       if(is.null(selectedPoints$points) || dim(selectedPoints$points)[1]==0){
         selectedPoints$points = rows
-        return()
+        return(nrow(rows))
       }
       matches = which (selectedPoints$points$hmm %in% rows$hmm)
       if (toggle & length(matches >0)){
         selectedPoints$points = selectedPoints$points[-matches,]
+        return (-(length(matches)))
       }
       else{
-        selectedPoints$points = rbind (selectedPoints$points, rows, fill=TRUE)
+        selectedPoints$points = rbind (selectedPoints$points[-matches,], rows, fill=TRUE)
+        return (nrow(rows) - length(matches))
       }
     }
   }
@@ -974,7 +982,6 @@ server <- function(input, output, session) {
     hmmTable
   })
   
-
   hmmTableDataSubset <- reactive({
     fullTable = hmmTableDataFull()
     if (input$radioButtons_HowManyHMMRows == "selected"){
@@ -994,7 +1001,7 @@ server <- function(input, output, session) {
   #})
   
   output$resultsByHMMTable <- DT::renderDataTable({
-    HMMTable_ =function(){} # for editor navigation
+    HMMTable_ =function(){} # ignore, only here for editor navigation
     
     #hmmTableDataFull()  #invalidate based on full data but not the subset so I use isolate below
     #hmmTable = isolate(hmmTableDataSubset()) #hmmTableDataWithMetagenomeCounts()
@@ -1054,10 +1061,28 @@ server <- function(input, output, session) {
     }
   )
   
+  selectHMMButton_ = function(){} #for editor navigation
+  observe({
+    if (input$radioButtons_HowManyHMMRows == "selected" |
+        length(input$resultsByHMMTable_rows_selected)==0){
+      shinyjs::disable(id="selectHMMButton")
+    }
+    else{
+      shinyjs::enable(id="selectHMMButton")
+    }
+  })
+  
   observeEvent(input$selectHMMButton, {
     #if any rows are selected, add it to the list of selected points
     req(input$resultsByHMMTable_rows_selected)
-    selectPoints(hmmTableDataSubset()[input$resultsByHMMTable_rows_selected])
+    numSelected = selectPoints(hmmTableDataSubset()[input$resultsByHMMTable_rows_selected])
+    
+    if (numSelected == 0){
+      showNotification("All selected rows already highlighted", type="warning")
+    }
+    else{
+      showNotification(sprintf ("%d selected rows newly highlighted. View in Computations tab or with 'Plot-highlighted HMM' radio button.", numSelected), type="message")
+    }
     
   })
   
