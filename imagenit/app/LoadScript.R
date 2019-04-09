@@ -297,7 +297,34 @@ getSFLDSubgroupData <- function (taxonOIDSet){
   sfldSubgroupDataLong[taxon_oid %in% taxonOIDSet]
 }
 
+# others --------------------
 
+# next three functions attempt to get pretty upper and lower limits
+# in log10 space to help the extreme points have bounding tick marks 
+stepAboveInLog10Space = function(x, steps=c(1,2,5,10)){
+  transX = log10(x) # work in log space
+  transSteps = log10(steps)
+  dec = transX - floor(transX) # get the fractional part of the log
+  transStep = transSteps[which(transSteps > dec)][1]
+  if (is.na(transStep)) transStep = 0  #
+  10^(floor(transX) + transStep)
+}
+
+
+stepBelowInLog10Space = function(x, steps=c(1,2,5,10)){
+  steps = rev(steps)
+  transX = log10(x) # work in log space
+  transSteps = log10(steps)
+  dec = transX - floor(transX) # get the fractional part of the log
+  transStep = transSteps[which(transSteps < dec)][1]
+  if (is.na(transStep)) transStep = 0  #
+  10^(floor(transX) + transStep)
+}
+
+
+niceLimitsInLog10Space <- function(range, steps = c(1,2,3,5,7,10)){
+  c(stepBelowInLog10Space (range[1]), stepAboveInLog10Space(range[2]))
+}
 
 
 
