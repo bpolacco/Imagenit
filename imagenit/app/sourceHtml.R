@@ -3,7 +3,7 @@ instructionHTML = "
 
 <p><strong> The most up-to-date info, including tutorial, source code and citation information is at <a href='https://github.com/bpolacco/Imagenit'> github</a> </strong></p>
 
-<p> <strong> Looking for the <a href='/map'>map? Click here.</a> </strong></p>
+<p> <strong> Looking for the <a href='/map' target='_blank'>map? Click here.</strong>(opens in new window)</a> </p>
 
 <p> This web tool is arranged as a series of tabs that are designed to be visited in order. 
 You are currently on the instructions tab.  Read below for background and tips on using this tool. </p>
@@ -18,16 +18,17 @@ You are currently on the instructions tab.  Read below for background and tips o
 <p> You are here!  </p>
 <p> The aim of this tool is to facilitate the identification of genes and protein functions that are 
 causally associated with environments. Briefly, you choose a contrasting set of metagenome samples, for
-example freshwater vs saline wetland samples, and then the tool computes and shows which types of genes are found more
+example freshwater vs saline wetland samples, and then the tool computes and shows which sets of homologous genes are found more
 often in one than the other.</p>
 
 <h2> 2. Select Metagenome Surveys </h2>
 <p> This tab allows you to define two sets of metagenomes that you would like to compare. It is initially populated with
 a test set of saline and freshwater wetland samples as used in the tutorial. For your own analyses, first click Clear Set 1 and Clear Set 2, then proceed to
 define your sets.  Set names can be defined which will be used in later tabs in images and tables.  The table at the bottom of the page
-allows for sorting and searching based on any of the meta data columns. Partial matches are allowed, so '13272' is enough to find taxon_OID 3300013272,
+allows for sorting and searching based on any of the meta data columns. Partial matches are allowed, so '13272' is enough to find taxon_OID 3300013272 
+(which is a unique identifier to specific metagenomic sample),
 and 'termes' enough for the termites <i>Amitermes</i> and <i>Nasutitermes</i>, but be careful because 'oral' will find many c<i>oral</i> 
-metagenomes.</p> To add metagenomes select rows in the table by clicking (they'll turn blue), then click 'Add selected rows to Set 1(2)'.
+metagenomes.</p> To add metagenomes, select rows in the table by clicking (they'll turn blue), then click 'Add selected rows to Set 1(2)'.
 </p><p> Once your contrasting sets of metagenomes are defined, proceed to the next tab.  Hint:  To save your sets before proceeding, you
 can jump to Tab 4 'Download data...' and choose to Download the metagenome table.
 </p>
@@ -35,7 +36,7 @@ can jump to Tab 4 'Download data...' and choose to Download the metagenome table
 <p> Run the computations here and view your results.  The main panels here show </p>
 <ul>
 <li> Scatterplot of metagenome sizes </li>
-<li> Compute Button and status message </li>
+<li> Compute button and status message </li>
 <li> Scatterplot of HMM abundances in sets </li>
 <li> Detailed view of HMM hits per metagenome</li>
 </ul>
@@ -45,7 +46,7 @@ can jump to Tab 4 'Download data...' and choose to Download the metagenome table
 Notice that the scales are in log space, so metagenomes could differ in size by orders of magnitude. If the rate of PFAM matches is
 consistent, the metagenomes should fall on a straight line on this plot. If they do not, as in the tutorial fresh-/salt- water case,
 results should be interpeted cautiously. For the tutorial example, it appears that the saltwater metagenomes have rates of PFAM matches
-20-25% higher than the freshwater cases. This could lead to some proteins appearing higher abundance in the saltwater case when it could
+20-25% higher than the freshwater cases. This could lead to some proteins showing higher abundance in the saltwater case when it could
 be just an artifact of metagenome data processing.</p>
 
 <h4> Compute button and status message </h4>
