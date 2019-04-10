@@ -43,9 +43,10 @@ ui <- fluidPage(
                       selectInput('showSet1BoxSelect', label = "Metagenomes in Set 1 (click to view all)", 
                                            choices = c(), multiple=FALSE, width="100%",
                                            selectize = FALSE), 
-                      actionButton('removeOneFromSet1Button', "Remove 1"),
-                      actionButton ('addToSet1Button', "Add to Set 1"),
-                      actionButton ('clearSet1Button', "Clear Set 1")
+                      htmlOutput ('set1SelectionNotice'),
+                      actionButton ('addToSet1Button', "Add"),
+                      actionButton('removeOneFromSet1Button', "Remove"),
+                      actionButton ('clearSet1Button', "Clear All Set 1")
                       
                ),
                #column(4,verbatimTextOutput('showSelectionBox')),
@@ -54,14 +55,15 @@ ui <- fluidPage(
                       fluidRow(selectInput('showSet2BoxSelect', label = "Metagenomes in Set 2 (click to view all)", 
                                            choices = c(), multiple=FALSE, width="100%",
                                            selectize = FALSE)),
-                      actionButton('removeOneFromSet2Button', "Remove 1"),
-                      actionButton('addToSet2Button', "Add to Set 2"),
-                      actionButton('clearSet2Button', "Clear Set 2")
+                      htmlOutput ('set2SelectionNotice'),
+                      actionButton('addToSet2Button', "Add"),
+                      actionButton('removeOneFromSet2Button', "Remove"),
+                      actionButton('clearSet2Button', "Clear All Set 2")
                )
              ),
              HTML ("<hr/>"),
-             HTML ("<strong>All available metagenome surveys and their metadata</strong>"),
-             radioButtons("selectTableRadioButtons", label="Show", choices = c("All metagenomes"="all",
+             HTML ("<strong>Available metagenome surveys and their metadata</strong>"),
+             radioButtons("selectTableRadioButtons",label=NULL, choices = c("All metagenomes"="all",
                                                                              "Set 1"= "set1",
                                                                              "Set 2"= "set2"),
                           inline=TRUE),
@@ -313,6 +315,7 @@ server <- function(input, output, session) {
   #   }
   # })
   
+  #switch data in table based on radiobutton selected
   metaDataToDisplay = reactive({
     if (input$selectTableRadioButtons == "all"){
       metaData
@@ -324,7 +327,8 @@ server <- function(input, output, session) {
       metaData[taxon_oid %in% sets$set2]
       }
   })
-    
+  
+  
   output$selectionTable <- DT::renderDataTable({
     DT::datatable(metaDataToDisplay(), extensions=c("Buttons"),
                   style="bootstrap", class = 'table-condensed table-bordered',
@@ -376,28 +380,24 @@ server <- function(input, output, session) {
 
   })
   
-  
-  #update text on buttons with number of selected rows
   selLength <- reactive ({length(input$selectionTable_rows_selected)})
-  observeEvent (selLength(),{
-    numRows = selLength()#length(input$selectionTable_rows_selected)
-    if (numRows > 0){
-      updateActionButton(session, inputId = "addToSet1Button", 
-                         label = paste ("Add", numRows, "selected rows to set 1"))
-      updateActionButton(session, inputId = "addToSet2Button",
-                         label = paste ("Add", numRows, "selected rows to set 2"))
-      
+  
+  selectionNotice = reactive({
+    if (selLength() > 0){
+      sprintf("%d selected metagenomes in table", selLength())
     }
     else{
-      updateActionButton(session, inputId = "addToSet1Button",
-                         label = paste ("Select rows below to add to either set"))
-      updateActionButton(session, inputId = "addToSet2Button",
-                         label = paste ("Select rows below to add to either set"))
-      
+      "Select rows below to add/remove to either set"
     }
-    
   })
-  
+    
+  output$set1SelectionNotice <- renderText({
+    selectionNotice()
+  })
+  output$set2SelectionNotice <- renderText({
+    selectionNotice()
+  })
+    
   
   observeEvent(input$addToSet1Button, {
     req(input$selectionTable_rows_selected)
@@ -430,11 +430,35 @@ server <- function(input, output, session) {
   })
   
   observeEvent (input$removeOneFromSet1Button,{
-    sets$set1 = setdiff(sets$set1, input$showSet1BoxSelect)
+    #sets$set1 = setdiff(sets$set1, input$showSet1BoxSelect)
+    req(input$selectionTable_rows_selected)
+    s = metaDataToDisplay()[input$selectionTable_rows_selected,taxon_oid,]
+    
+    #we're trying to remove from set1, find out if there's actually overlap
+    sintersect = intersect (s, sets$set1)
+    if (length(sintersect) > 0){
+      sets$set1 = setdiff (sets$set1, sintersect)
+      DT::selectRows(selectionTableProxy, NULL)
+    }
+    else{
+      showNotification("No selected metagenomes are in set 1" ,type="warning")
+    }
   })
   
   observeEvent (input$removeOneFromSet2Button,{
-    sets$set2 = setdiff(sets$set2, input$showSet2BoxSelect)
+    #sets$set2 = setdiff(sets$set2, input$showSet2BoxSelect)
+    req(input$selectionTable_rows_selected)
+    s = metaDataToDisplay()[input$selectionTable_rows_selected,taxon_oid,]
+    
+    #we're trying to remove from set1, find out if there's actually overlap
+    sintersect = intersect (s, sets$set2)
+    if (length(sintersect) > 0){
+      sets$set2 = setdiff (sets$set2, sintersect)
+      DT::selectRows(selectionTableProxy, NULL)
+    }
+    else{
+      showNotification("No selected metagenomes are in set 2" ,type="warning")
+    }
   })
   
   
