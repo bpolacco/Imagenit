@@ -84,6 +84,10 @@ hmmTableMessageHTML = " <p>  Recent testing has shown this table to be slow to r
 We are investigating the cause and hope to have a solution soon.
 "
 
+dataMismatchWarningHTML = "<div style='background-color:#f44336;color:white;padding:10px;margin-bottom:15px'>
+<strong> Warning! </strong>
+Computed statistics are not for current selected sets. Click 'Do Comparison' on Computations tab to reset.</div>"
+
 
 #  The next html blocks and function assemble the JGI form to 
 #  access the list of genes matching one or more pfam and multiple taxonOID

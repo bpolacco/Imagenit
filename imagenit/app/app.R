@@ -69,6 +69,7 @@ ui <- fluidPage(
 
     # _ tabPanel 3 Computations --------------------------------------
     tabPanel("3. Computations",
+             htmlOutput('resultsSetsMismatchWarning'),
              fluidRow (
                        column(6,
                               HTML(instructionsComputationsHTML)
@@ -141,6 +142,7 @@ ui <- fluidPage(
              ),
     # _ tabPanel 4 Download data --------------------------------------
     tabPanel("4. Download data and results",
+             htmlOutput("tableSetsMismatchWarning"),
              tabsetPanel(tabPanel("Metagenome Table",
                                   downloadButton ("downloadMetagenomeTableButton", "Download Table"),
                                   DT::dataTableOutput("resultsByMetagenomeTable")),
@@ -292,7 +294,21 @@ server <- function(input, output, session) {
   ## selection page  --------------------------------
   
   sets <- reactiveValues(set2=twitchellIsland2, set1=saltPond2)
+
+  # attempts to change sets after computations are started should
+  # raise a warning
+  warnedAboutDataMismatch = FALSE
+  observeEvent (c(sets$set1, sets$set2),{
+    #sets$set1; sets$set2
+    if (!warnedAboutDataMismatch){
+      if (nclicks() != 0 | !is.null(asyncData())){
+      shinyjs::alert ("WARNING: You changed sets after starting computations. You can continue, but the results will not apply to the new sets until you complete the computations again.")
+      warnedAboutDataMismatch <<- TRUE
+      }
+    }
+  })
   
+    
   output$selectionTable <- DT::renderDataTable({
     DT::datatable(metaData, extensions=c("Buttons"),
                   style="bootstrap", class = 'table-condensed table-bordered',
@@ -427,7 +443,29 @@ server <- function(input, output, session) {
   
    
   
+  setsMismatch = function (array1, array2){
+    any (is.na(match(array1, array2))) |
+      any (is.na(match(array2, array1)))
+  }
   
+  output$resultsSetsMismatchWarning <- renderText ({
+    req(asyncData()$sets)
+    if (setsMismatch(unlist(asyncData()$sets), c(sets$set1, sets$set2))){
+      dataMismatchWarningHTML
+    }
+    else{""}
+  })
+  
+  output$tableSetsMismatchWarning <- renderText ({
+    req(asyncData()$sets)
+    if (setsMismatch(unlist(asyncData()$sets), c(sets$set1, sets$set2))){
+      dataMismatchWarningHTML
+    }
+    else{""}
+  })
+  
+  
+    
   ## computation page  ===========================
   statInfo <- statusSetup()
   set_status(statInfo, "Ready")
@@ -461,6 +499,7 @@ server <- function(input, output, session) {
   # some ideas inspired by  http://blog.fellstat.com/?p=407
   observeEvent (input$doComparisonButton,{
     disable("doComparisonButton")
+    warnedAboutDataMismatch <<- FALSE # reset this to force warning again.
     #alert ("testing")
     #ranges$x <- ranges$y <- NULL
     #with (ranges, {x <- y <- NULL})
@@ -487,7 +526,7 @@ server <- function(input, output, session) {
     })
     result <- future({
       workingData <- LoadData(setss, hmmTypes, statusFUN)
-      DoComputation(workingData, statusFUN) 
+      DoComputation(setss, workingData, statusFUN) 
       }) %...>% asyncData()
     
     # Catch interrupt (or any other error) and notify user
@@ -514,6 +553,7 @@ server <- function(input, output, session) {
   
   # 
   # tabulate necessary data for taxonOIDs and hmmTypes
+  # this gets called in a future, so beware of using global variables
   # 
   LoadData <- function (sets, hmmTypes, statusFUN = NULL){
     taxonIDs = unlist(sets)
@@ -549,7 +589,7 @@ server <- function(input, output, session) {
     result
   }
   
-  DoComputation <- function(workingData,statusFUN = NULL){
+  DoComputation <- function(setss, workingData,statusFUN = NULL){
     if (!is.null(statusFUN)) statusFUN("Comparing HMMSEARCH results, calculating statistics")
     
     allHmm = levels(workingData$hmm)
@@ -580,7 +620,7 @@ server <- function(input, output, session) {
       }
   if (!is.null(statusFUN)) statusFUN("Comparing HMMSEARCH results, calculating q-values")
   df$qValue = qvalue::qvalue(df$pValue)$qvalues
-  list(hmmMatchTable = workingData, hmmStats = df)    
+  list(sets = setss, hmmMatchTable = workingData, hmmStats = df)    
   }
   
   # computedData
