@@ -61,6 +61,10 @@ ui <- fluidPage(
              ),
              HTML ("<hr/>"),
              HTML ("<strong>All available metagenome surveys and their metadata</strong>"),
+             radioButtons("selectTableRadioButtons", label="Show", choices = c("All metagenomes"="all",
+                                                                             "Set 1"= "set1",
+                                                                             "Set 2"= "set2"),
+                          inline=TRUE),
              fluidRow(column(12,
                              DT::dataTableOutput("selectionTable"), 
                              style = "overflow-y: visible; overflow-x: auto;")
@@ -298,19 +302,31 @@ server <- function(input, output, session) {
   # attempts to change sets after computations are started should
   # raise a warning
   warnedAboutDataMismatch = FALSE
-  observeEvent (c(sets$set1, sets$set2),{
-    #sets$set1; sets$set2
-    if (!warnedAboutDataMismatch){
-      if (nclicks() != 0 | !is.null(asyncData())){
-      shinyjs::alert ("WARNING: You changed sets after starting computations. You can continue, but the results will not apply to the new sets until you complete the computations again.")
-      warnedAboutDataMismatch <<- TRUE
-      }
-    }
-  })
+  # removed for now because the red box warning on page may be enough
+  # observeEvent (c(sets$set1, sets$set2),{
+  #   #sets$set1; sets$set2
+  #   if (!warnedAboutDataMismatch){
+  #     if (nclicks() != 0 | !is.null(asyncData())){
+  #     shinyjs::alert ("WARNING: You changed sets after starting computations. You can continue, but the results will not apply to the new sets until you complete the computations again.")
+  #     warnedAboutDataMismatch <<- TRUE
+  #     }
+  #   }
+  # })
   
+  metaDataToDisplay = reactive({
+    if (input$selectTableRadioButtons == "all"){
+      metaData
+      }
+    else if (input$selectTableRadioButtons == "set1"){
+      metaData[taxon_oid %in% sets$set1]
+      }
+    else if (input$selectTableRadioButtons == "set2"){
+      metaData[taxon_oid %in% sets$set2]
+      }
+  })
     
   output$selectionTable <- DT::renderDataTable({
-    DT::datatable(metaData, extensions=c("Buttons"),
+    DT::datatable(metaDataToDisplay(), extensions=c("Buttons"),
                   style="bootstrap", class = 'table-condensed table-bordered',
                   rownames=FALSE,
                   colnames = c("Study Name" = "Study.Name",
@@ -333,18 +349,20 @@ server <- function(input, output, session) {
   observe({
     dataMap = metaData[taxon_oid %in% sets$set1, .(taxon_oid, as.character(Genome.Name...Sample.Name))]
     dm = dataMap$taxon_oid
-    names(dm) = dataMap$V2
-    
-    updateSelectInput(session, "showSet1BoxSelect", choices = dm)
+    names(dm) = paste (dataMap$taxon_oid, dataMap$V2, sep=" ")
+    lab = sprintf ("%d metagenomes in Set 1 ", length(dm))
+    if (length(dm) > 1) lab = paste (lab, "(click to view all)")
+    updateSelectInput(session, "showSet1BoxSelect", choices = dm, label = lab)
   })
 
   #update the values in showSet2BoxSelect as sets$set2 changes
   observe({
     dataMap = metaData[taxon_oid %in% sets$set2, .(taxon_oid, as.character(Genome.Name...Sample.Name))]
     dm = dataMap$taxon_oid
-    names(dm) = dataMap$V2
-    
-    updateSelectInput(session, "showSet2BoxSelect", choices = dm)
+    names(dm) = paste (dataMap$taxon_oid, dataMap$V2, sep=" ")
+    lab = sprintf ("%d metagenomes in Set 2 ", length(dm))
+    if (length(dm) > 1) lab = paste (lab, "(click to view all)")
+    updateSelectInput(session, "showSet2BoxSelect", choices = dm, label = lab)
   })
   
   
@@ -383,7 +401,7 @@ server <- function(input, output, session) {
   
   observeEvent(input$addToSet1Button, {
     req(input$selectionTable_rows_selected)
-    s = metaData[input$selectionTable_rows_selected,taxon_oid,]
+    s = metaDataToDisplay()[input$selectionTable_rows_selected,taxon_oid,]
     DT::selectRows(selectionTableProxy, NULL)
     sdiff = setdiff(s, sets$set2)
     if (length(sdiff)  != length(s)){
@@ -394,7 +412,7 @@ server <- function(input, output, session) {
   
   observeEvent(input$addToSet2Button, {
     req(input$selectionTable_rows_selected)
-    s = metaData[input$selectionTable_rows_selected,taxon_oid,]
+    s = metaDataToDisplay()[input$selectionTable_rows_selected,taxon_oid,]
     DT::selectRows(selectionTableProxy, NULL)
     sdiff = setdiff(s, sets$set1)
     if (length(sdiff)  != length(s)){
@@ -420,7 +438,7 @@ server <- function(input, output, session) {
   })
   
   
-    
+  # an obsolete map showing selected sets  
   output$selectMap <- renderPlot({
     selectedGenomes = rbind(data.frame(taxon_oid = sets$set1, condition = rep("set1", length(sets$set1))),
                             data.frame(taxon_oid = sets$set2, condition = rep("set2", length(sets$set2)))
@@ -1005,20 +1023,16 @@ server <- function(input, output, session) {
     # dataForChosenSets()
     # computedData()$hmmStats
     # allHMMNames()
-    print("hmm Table 1")
     hmmTable = merge (computedData()$hmmStats, allHMMNames(), by = "hmm")
-    print("hmm Table 2")
     #subset the summary then convert to wide format using dcast:
     hmmHits = dcast(dataForChosenSets()[taxon_oid %in% c(sets$set1, sets$set2), .(taxon_oid,hmm, numSeqs)],
                     hmm~taxon_oid, value.var="numSeqs")
-    print("hmm Table 3")
 #    for (tid in c(sets$set1, sets$set2)){
 #      taxonColumn = hmmHits[taxon_oid == tid, .(hmm, numSeqs)]
 #      setnames(taxonColumn, old = "numSeqs", new = tid)
 #      hmmTable = merge(hmmTable, taxonColumn, by = "hmm", all.x=TRUE)
 #    }
     hmmTable = merge (hmmTable, hmmHits, by = "hmm")
-    print("hmm Table 4")
     hmmTable
   })
   
