@@ -499,7 +499,7 @@ server <- function(input, output, session) {
     # worry about timing/order of setting nclicks 
     asyncData()
     if (nclicks() > 0){
-      invalidateLater(2000,session)
+      invalidateLater(1000,session)
     }
     msg = get_status(statInfo)
     if (msg != "Ready"){
@@ -599,7 +599,6 @@ server <- function(input, output, session) {
     if ("subgroups" %in% hmmTypes){
       result = rbind (result, getSFLDSubgroupData(taxonIDs))
     }
-    
     result = fillInZeros (result, sets)
     result = addMetagenomeInfo(result, metagenomeInfo)
     result[,numSeqsLogFriendly:=as.numeric(numSeqs)]
@@ -637,7 +636,13 @@ server <- function(input, output, session) {
         }
       }
   if (!is.null(statusFUN)) statusFUN("Comparing HMMSEARCH results, calculating q-values")
-  df$qValue = qvalue::qvalue(df$pValue)$qvalues
+  df$qValue = tryCatch( { qvalue::qvalue(df$pValue)$qvalues},
+            error=function(cond){
+              print("Failure while computing q values")
+              print(cond)
+              print(setss)
+              return(df$pValue)
+              })
   list(sets = setss, hmmMatchTable = workingData, hmmStats = df)    
   }
   
