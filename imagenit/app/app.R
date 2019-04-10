@@ -777,7 +777,8 @@ server <- function(input, output, session) {
         return (-(length(matches)))
       }
       else{
-        selectedPoints$points = rbind (selectedPoints$points[-matches,], rows, fill=TRUE)
+        indeces = setdiff(1:nrow(selectedPoints$points), matches)
+        selectedPoints$points = rbind (selectedPoints$points[indeces,], rows, fill=TRUE)
         return (nrow(rows) - length(matches))
       }
     }
