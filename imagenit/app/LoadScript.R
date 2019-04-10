@@ -274,22 +274,22 @@ calculateQValues=function(subsetData){
 
 
 # SFLD data --------------------
-
-sfldFamilyDataLong = NULL
+#  # this gets called in a future, so beware of assigning to  global variables
 getSFLDFamilyData <- function (taxonOIDSet){
+  sfldFamilyDataLong = NULL
   if (is.null(sfldFamilyDataLong)){
-    sfldFamilyDataLong <<- fread (dataFile("sfldFamilyDataFile"), integer64 = "character")
+    sfldFamilyDataLong <- fread (dataFile("sfldFamilyDataFile"), integer64 = "character")
     sfldFamilyDataLong[,taxon_oid := as.character(taxon_oid)]
     #sfldFamilyDataLong[,ID := as.integer(sapply ( strsplit(hmm, "_"), "[[", 2)) ]
   }
   sfldFamilyDataLong[taxon_oid %in% taxonOIDSet]
 }
 
-
-sfldSubgroupDataLong = NULL
+#  # this gets called in a future, so beware of using global variables
 getSFLDSubgroupData <- function (taxonOIDSet){
+  sfldSubgroupDataLong = NULL
   if (is.null(sfldSubgroupDataLong)){
-    sfldSubgroupDataLong <<- fread (dataFile("sfldSubgroupDataFile"), integer64 = "character")
+    sfldSubgroupDataLong <- fread (dataFile("sfldSubgroupDataFile"), integer64 = "character")
     sfldSubgroupDataLong[,taxon_oid := as.character(taxon_oid)]
     #sfldSubgroupDataLong[,ID := as.integer(sapply ( strsplit(hmm, "_"), "[[", 2)) ]
     
