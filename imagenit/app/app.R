@@ -128,6 +128,8 @@ ui <- fluidPage(
              ),
              fluidRow(
                HTML ("<hr/>"),
+               HTML ("<strong>Detail view of HMM matches in metagenomes</strong>"),
+               
                       column(12,plotOutput("resultsPlot",
                                            click = "results_click",
                                            dblclick = "results_dblclick",

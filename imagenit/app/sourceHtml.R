@@ -3,7 +3,7 @@ instructionHTML = "
 
 <p><strong> The most up-to-date info, including tutorial, source code and citation information is at <a href='https://github.com/bpolacco/Imagenit'> github</a> </strong></p>
 
-<p> <strong> Looking for the <a href='/map' target='_blank'>map? Click here.</strong>(opens in new window)</a> </p>
+<p> <strong> Looking for the <a href='/map' target='_blank'>map? Click here </strong></a><small>(opens in new window)</small></p>
 
 <p> This web tool is arranged as a series of tabs that are designed to be visited in order. 
 You are currently on the instructions tab.  Read below for background and tips on using this tool. </p>
@@ -28,9 +28,9 @@ define your sets.  Set names can be defined which will be used in later tabs in 
 allows for sorting and searching based on any of the meta data columns. Partial matches are allowed, so '13272' is enough to find taxon_OID 3300013272 
 (which is a unique identifier to specific metagenomic sample),
 and 'termes' enough for the termites <i>Amitermes</i> and <i>Nasutitermes</i>, but be careful because 'oral' will find many c<i>oral</i> 
-metagenomes.</p> To add metagenomes, select rows in the table by clicking (they'll turn blue), then click 'Add selected rows to Set 1(2)'.
-</p><p> Once your contrasting sets of metagenomes are defined, proceed to the next tab.  Hint:  To save your sets before proceeding, you
-can jump to Tab 4 'Download data...' and choose to Download the metagenome table.
+metagenomes.</p> <p>To add metagenomes, select rows in the table by clicking (they'll turn blue), then click 'Add' for the corresponding set.
+</p><p> Once your contrasting sets of metagenomes are defined, proceed to the next tab.  Hint:  You can use the controls on the metadata table to 
+save  either of your sets. You can select the Set 1 or Set 2 radio button, then click 'CSV' to download metadata for that set.
 </p>
 <h2> 3. Computations </h2>
 <p> Run the computations here and view your results.  The main panels here show </p>
@@ -50,7 +50,7 @@ results should be interpeted cautiously. For the tutorial example, it appears th
 be just an artifact of metagenome data processing.</p>
 
 <h4> Compute button and status message </h4>
-<p>Select the type of HMMs you are interested in then click submit. You should see a real-time progress message.  If load on the server is light, results will be ready in a couple minutes. Please be patient.</p>
+<p>Select the type of HMMs you are interested in then click submit. You should see a real-time progress message.  If the server is only lightly busy, results will be ready in a couple minutes. Please be patient.</p>
 
 <h4> HMM abundance comparison scatter plot </h4>
 <p> This and the next <strong> Detailed HMM Hits</strong> view will not show up until after computations are finished. Points are HMMs that pass the
@@ -58,8 +58,8 @@ significance threshold chosen. Select points to view in more detail by clicking 
 
 <h4> Detailed HMM Hits </h4>
 <p> This view shows the details for selected HMMs in the HMM comparison scatter plot above. Each point is the number or rate
-(set by radio buttons at bottom of plot) of HMM
-matches in a single metagenome, and the point is colored by which set the metagenome belongs to. </p>
+(set by radio buttons at the bottom of the plot) of HMM
+matches in a single metagenome, and a point's color indicates which set the metagenome belongs to. </p>
 
 <h2> 4. Download data and results </h2>
 <p> Data and results in table form</p>

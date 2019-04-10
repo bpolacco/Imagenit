@@ -24,6 +24,8 @@ jgiFormManyPfamManyMetagenomeTemplate = '
 </form>
 
 '
+
+
 taxonOIDTemplate = '
 <input type="hidden" name="genomeFilterSelections" value="%s"/>
 <input type="hidden" name="selectedGenome1" value="%s"/>
@@ -39,3 +41,6 @@ CreateJGIFormManyPfamManyMetagenome=function(hmm, taxonOIDs){
   
   sprintf(jgiFormManyPfamManyMetagenomeTemplate, pfamListString,  taxonOIDInputs, pfamListString,length(taxonOIDs))
 }
+
+
+antarcticaMessageHTML = "<div><small><p>Color indicates relative abundance (orange = high, purple = low) compared to global rates for chosen HMM</p><p>Metagenomes with no available coordinate data are spread at latitude -180, at bottom of map</small></div>"

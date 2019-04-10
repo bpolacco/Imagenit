@@ -49,7 +49,8 @@ ui <- fluidPage(
                   min = -1,
                   max = 20,
                   value = 4),
-      checkboxInput("showAllSurveys", "Show all surveys", value = FALSE)
+      checkboxInput("showAllSurveys", "Show all surveys", value = FALSE),
+      HTML ( antarcticaMessageHTML )
       
       ),
       
