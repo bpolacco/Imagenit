@@ -43,4 +43,4 @@ CreateJGIFormManyPfamManyMetagenome=function(hmm, taxonOIDs){
 }
 
 
-antarcticaMessageHTML = "<div><small><p>Color indicates relative abundance (orange = high, purple = low) compared to global rates for chosen HMM</p><p>Metagenomes with no available coordinate data are spread at latitude -180, at bottom of map</small></div>"
+antarcticaMessageHTML = "<div><small><p>Color indicates relative abundance (orange = high, purple = low) compared to global rates for chosen HMM</p><p>Metagenomes with no available coordinate data are spread at latitude -90&#176;, at bottom of map</small></div>"
